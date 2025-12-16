@@ -1,0 +1,38 @@
+# CODEOWNERS file
+# 
+# This file defines who is responsible for code in this repository.
+# All pull requests require approval from the listed owners.
+#
+# More info: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repo
+* @VArterJr
+
+# Documentation
+/doc/ @VArterJr
+*.md @VArterJr
+
+# Source code
+/src/ @VArterJr
+/scripts/ @VArterJr
+
+# Configuration files
+*.json @VArterJr
+*.mjs @VArterJr
+*.cjs @VArterJr
+*.ts @VArterJr
+tsconfig*.json @VArterJr
+
+# Build and tooling config
+/tailwind.config.cjs @VArterJr
+/postcss.config.cjs @VArterJr
+/vitest.config.ts @VArterJr
+
+# License and contributing
+/LICENSE @VArterJr
+/CONTRIBUTING.md @VArterJr
+/CODEOWNERS @VArterJr
+
+# Root config files
+/.gitignore @VArterJr
+/.env.example @VArterJr

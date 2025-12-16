@@ -1,0 +1,195 @@
+import type { AppState, Bookmark, Folder, Group, User, UserPreferences, ViewMode } from '@app/shared';
+import { apiFetch } from '../api/http';
+
+export interface StoreState {
+  user: User | null;
+  app: AppState;
+  selectedFolderId: string | null;
+  selectedGroupId: string | null;
+  loading: boolean;
+  error: string | null;
+}
+
+type Listener = (state: StoreState) => void;
+
+export class AppStore {
+  private state: StoreState;
+  private listeners = new Set<Listener>();
+
+  constructor() {
+    this.state = {
+      user: null,
+      app: { folders: [], groups: [], bookmarks: [] },
+      selectedFolderId: null,
+      selectedGroupId: null,
+      loading: false,
+      error: null
+    };
+  }
+
+  get(): StoreState {
+    return this.state;
+  }
+
+  subscribe(listener: Listener): () => void {
+    this.listeners.add(listener);
+    listener(this.state);
+    return () => this.listeners.delete(listener);
+  }
+
+  private set(patch: Partial<StoreState>): void {
+    this.state = { ...this.state, ...patch };
+    for (const l of this.listeners) l(this.state);
+  }
+
+  async bootstrap(): Promise<void> {
+    this.set({ loading: true, error: null });
+    try {
+      const me = await apiFetch<User | null>('/api/me', { method: 'GET' });
+      this.set({ user: me });
+      if (me) await this.refreshState();
+    } catch (e) {
+      this.set({ error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      this.set({ loading: false });
+    }
+  }
+
+  async refreshState(): Promise<void> {
+    const app = await apiFetch<AppState>('/api/state', { method: 'GET' });
+    let selectedFolderId = this.state.selectedFolderId;
+    let selectedGroupId = this.state.selectedGroupId;
+
+    if (!selectedFolderId || !app.folders.some(f => f.id === selectedFolderId)) {
+      selectedFolderId = app.folders[0]?.id ?? null;
+    }
+
+    const groupsForFolder = selectedFolderId ? app.groups.filter(g => g.folderId === selectedFolderId) : [];
+    if (!selectedGroupId || !groupsForFolder.some(g => g.id === selectedGroupId)) {
+      selectedGroupId = groupsForFolder[0]?.id ?? null;
+    }
+
+    this.set({ app, selectedFolderId, selectedGroupId });
+  }
+
+  selectFolder(folderId: string): void {
+    const folderExists = this.state.app.folders.some((f) => f.id === folderId);
+    if (!folderExists) return;
+    const groupsForFolder = this.state.app.groups.filter((g) => g.folderId === folderId);
+    const selectedGroupId = groupsForFolder[0]?.id ?? null;
+    this.set({ selectedFolderId: folderId, selectedGroupId });
+  }
+
+  selectGroup(groupId: string): void {
+    const group = this.state.app.groups.find((g) => g.id === groupId);
+    if (!group) return;
+    this.set({ selectedFolderId: group.folderId, selectedGroupId: groupId });
+  }
+
+  // Auth
+  async register(username: string, password: string): Promise<void> {
+    await apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify({ username, password }) });
+    await this.login(username, password);
+  }
+
+  async login(username: string, password: string): Promise<void> {
+    const me = await apiFetch<User>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+    this.set({ user: me });
+    await this.refreshState();
+  }
+
+  async logout(): Promise<void> {
+    await apiFetch('/api/auth/logout', { method: 'POST' });
+    this.set({ user: null, app: { folders: [], groups: [], bookmarks: [] }, selectedFolderId: null, selectedGroupId: null });
+  }
+
+  // Preferences
+  async setTheme(theme: string): Promise<void> {
+    const prefs = await apiFetch<UserPreferences>('/api/preferences', { method: 'PUT', body: JSON.stringify({ theme }) });
+    if (this.state.user) this.set({ user: { ...this.state.user, preferences: prefs } });
+  }
+
+  async setViewMode(viewMode: ViewMode): Promise<void> {
+    const prefs = await apiFetch<UserPreferences>('/api/preferences', { method: 'PUT', body: JSON.stringify({ viewMode }) });
+    if (this.state.user) this.set({ user: { ...this.state.user, preferences: prefs } });
+  }
+
+  // Folders
+  async createFolder(title: string): Promise<void> {
+    const folder = await apiFetch<Folder>('/api/folders', { method: 'POST', body: JSON.stringify({ title }) });
+    this.set({ app: { ...this.state.app, folders: [...this.state.app.folders, folder].sort(byPosition) } });
+    this.set({ selectedFolderId: folder.id });
+  }
+
+  async updateFolder(id: string, title: string): Promise<void> {
+    const folder = await apiFetch<Folder>(`/api/folders/${id}`, { method: 'PUT', body: JSON.stringify({ title }) });
+    this.set({ app: { ...this.state.app, folders: this.state.app.folders.map(f => (f.id === id ? folder : f)) } });
+  }
+
+  async deleteFolder(id: string): Promise<void> {
+    await apiFetch(`/api/folders/${id}`, { method: 'DELETE' });
+    await this.refreshState();
+  }
+
+  async reorderFolders(orderedIds: string[]): Promise<void> {
+    await apiFetch('/api/folders/reorder', { method: 'PUT', body: JSON.stringify({ orderedIds }) });
+    await this.refreshState();
+  }
+
+  // Groups
+  async createGroup(folderId: string, title: string): Promise<void> {
+    const group = await apiFetch<Group>('/api/groups', { method: 'POST', body: JSON.stringify({ folderId, title }) });
+    this.set({ app: { ...this.state.app, groups: [...this.state.app.groups, group].sort(byPosition) } });
+    this.set({ selectedGroupId: group.id });
+  }
+
+  async updateGroup(id: string, title: string): Promise<void> {
+    const group = await apiFetch<Group>(`/api/groups/${id}`, { method: 'PUT', body: JSON.stringify({ title }) });
+    this.set({ app: { ...this.state.app, groups: this.state.app.groups.map(g => (g.id === id ? group : g)) } });
+  }
+
+  async deleteGroup(id: string): Promise<void> {
+    await apiFetch(`/api/groups/${id}`, { method: 'DELETE' });
+    await this.refreshState();
+  }
+
+  async moveGroup(id: string, folderId: string, orderedIds: string[]): Promise<void> {
+    await apiFetch(`/api/groups/${id}/move`, { method: 'PUT', body: JSON.stringify({ folderId, orderedIds }) });
+    await this.refreshState();
+  }
+
+  async reorderGroups(folderId: string, orderedIds: string[]): Promise<void> {
+    await apiFetch(`/api/folders/${folderId}/groups/reorder`, { method: 'PUT', body: JSON.stringify({ orderedIds }) });
+    await this.refreshState();
+  }
+
+  // Bookmarks
+  async createBookmark(groupId: string, data: Omit<Bookmark, 'id' | 'userId' | 'groupId' | 'position'>): Promise<void> {
+    await apiFetch<Bookmark>('/api/bookmarks', { method: 'POST', body: JSON.stringify({ groupId, ...data }) });
+    await this.refreshState();
+  }
+
+  async updateBookmark(id: string, data: Partial<Omit<Bookmark, 'id' | 'userId' | 'groupId' | 'position'>>): Promise<void> {
+    await apiFetch<Bookmark>(`/api/bookmarks/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    await this.refreshState();
+  }
+
+  async deleteBookmark(id: string): Promise<void> {
+    await apiFetch(`/api/bookmarks/${id}`, { method: 'DELETE' });
+    await this.refreshState();
+  }
+
+  async moveBookmark(id: string, groupId: string, orderedIds: string[]): Promise<void> {
+    await apiFetch(`/api/bookmarks/${id}/move`, { method: 'PUT', body: JSON.stringify({ groupId, orderedIds }) });
+    await this.refreshState();
+  }
+
+  async reorderBookmarks(groupId: string, orderedIds: string[]): Promise<void> {
+    await apiFetch(`/api/groups/${groupId}/bookmarks/reorder`, { method: 'PUT', body: JSON.stringify({ orderedIds }) });
+    await this.refreshState();
+  }
+}
+
+function byPosition<T extends { position: number }>(a: T, b: T): number {
+  return a.position - b.position;
+}
