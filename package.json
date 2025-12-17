@@ -1,6 +1,6 @@
 {
   "name": "neotypa-booktabs",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Self-hosted bookmark manager with tabbed and hierarchical views",
   "license": "Elastic-2.0",
   "private": true,

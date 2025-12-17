@@ -108,6 +108,8 @@ export function registerApiRoutes(router: Router, dbFile: SqliteFileDb): void {
     const patch: Partial<UserPreferences> = {};
     if (typeof body.theme === 'string') patch.theme = body.theme;
     if (typeof body.viewMode === 'string') patch.viewMode = body.viewMode as ViewMode;
+    if (typeof body.bookmarkViewMode === 'string') patch.bookmarkViewMode = body.bookmarkViewMode as any;
+    if (typeof body.bookmarksPerContainer === 'number') patch.bookmarksPerContainer = body.bookmarksPerContainer;
 
     const prefs = await dbFile.withWrite((db) => updatePreferences(db, userId, patch));
     sendJson(res, 200, prefs);

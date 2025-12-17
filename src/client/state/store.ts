@@ -143,6 +143,16 @@ export class AppStore {
     if (this.state.user) this.set({ user: { ...this.state.user, preferences: prefs } });
   }
 
+  async setBookmarkViewMode(bookmarkViewMode: string): Promise<void> {
+    const prefs = await apiFetch<UserPreferences>('/api/preferences', { method: 'PUT', body: JSON.stringify({ bookmarkViewMode }) });
+    if (this.state.user) this.set({ user: { ...this.state.user, preferences: prefs } });
+  }
+
+  async setBookmarksPerContainer(bookmarksPerContainer: number): Promise<void> {
+    const prefs = await apiFetch<UserPreferences>('/api/preferences', { method: 'PUT', body: JSON.stringify({ bookmarksPerContainer }) });
+    if (this.state.user) this.set({ user: { ...this.state.user, preferences: prefs } });
+  }
+
   // Workspaces
   async createWorkspace(title: string): Promise<void> {
     const workspace = await apiFetch<Workspace>('/api/workspaces', { method: 'POST', body: JSON.stringify({ title }) });

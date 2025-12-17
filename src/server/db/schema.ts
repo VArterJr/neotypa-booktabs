@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
   password TEXT NOT NULL,
   theme TEXT NOT NULL,
   view_mode TEXT NOT NULL,
+  bookmark_view_mode TEXT NOT NULL DEFAULT 'card',
+  bookmarks_per_container INTEGER NOT NULL DEFAULT 20,
   created_at TEXT NOT NULL
 );
 

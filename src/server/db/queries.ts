@@ -7,8 +7,8 @@ import { all, nowIso, one, run } from './util.js';
  * Find a user by username
  * Note: Returns the password hash for authentication purposes
  */
-export function findUserByUsername(db: Database, username: string): { id: string; username: string; password: string; theme: string; view_mode: string } | null {
-  const rows = all<any>(db, 'SELECT id, username, password, theme, view_mode FROM users WHERE username = ?', [username]);
+export function findUserByUsername(db: Database, username: string): { id: string; username: string; password: string; theme: string; view_mode: string; bookmark_view_mode: string; bookmarks_per_container: number } | null {
+  const rows = all<any>(db, 'SELECT id, username, password, theme, view_mode, bookmark_view_mode, bookmarks_per_container FROM users WHERE username = ?', [username]);
   return rows[0] ?? null;
 }
 
@@ -16,13 +16,18 @@ export function findUserByUsername(db: Database, username: string): { id: string
  * Get user by ID without password hash
  */
 export function getUserById(db: Database, userId: string): User | null {
-  const rows = all<any>(db, 'SELECT id, username, theme, view_mode FROM users WHERE id = ?', [userId]);
+  const rows = all<any>(db, 'SELECT id, username, theme, view_mode, bookmark_view_mode, bookmarks_per_container FROM users WHERE id = ?', [userId]);
   if (rows.length === 0) return null;
   const u = one(rows);
   return {
     id: u.id,
     username: u.username,
-    preferences: { theme: u.theme, viewMode: u.view_mode as ViewMode }
+    preferences: { 
+      theme: u.theme, 
+      viewMode: u.view_mode as ViewMode,
+      bookmarkViewMode: u.bookmark_view_mode as any,
+      bookmarksPerContainer: u.bookmarks_per_container
+    }
   };
 }
 
@@ -33,12 +38,14 @@ export function getUserById(db: Database, userId: string): User | null {
 export function createUser(db: Database, username: string, password: string): User {
   const id = randomUUID();
   const now = nowIso();
-  run(db, 'INSERT INTO users (id, username, password, theme, view_mode, created_at) VALUES (?, ?, ?, ?, ?, ?)', [
+  run(db, 'INSERT INTO users (id, username, password, theme, view_mode, bookmark_view_mode, bookmarks_per_container, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [
     id,
     username,
     password,
     'light',
     'tabbed',
+    'card',
+    20,
     now
   ]);
   // Seed with a starter workspace, folder, and group so the UI isn't empty.
@@ -53,8 +60,10 @@ export function updatePreferences(db: Database, userId: string, patch: Partial<U
   if (!current) throw new Error('User not found');
   const theme = patch.theme ?? current.preferences.theme;
   const viewMode = patch.viewMode ?? current.preferences.viewMode;
-  run(db, 'UPDATE users SET theme = ?, view_mode = ? WHERE id = ?', [theme, viewMode, userId]);
-  return { theme, viewMode };
+  const bookmarkViewMode = patch.bookmarkViewMode ?? current.preferences.bookmarkViewMode;
+  const bookmarksPerContainer = patch.bookmarksPerContainer ?? current.preferences.bookmarksPerContainer;
+  run(db, 'UPDATE users SET theme = ?, view_mode = ?, bookmark_view_mode = ?, bookmarks_per_container = ? WHERE id = ?', [theme, viewMode, bookmarkViewMode, bookmarksPerContainer, userId]);
+  return { theme, viewMode, bookmarkViewMode, bookmarksPerContainer };
 }
 
 export function getState(db: Database, userId: string): AppState {

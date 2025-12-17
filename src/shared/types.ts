@@ -1,10 +1,13 @@
 export type ViewMode = 'tabbed' | 'hierarchical';
+export type BookmarkViewMode = 'grid' | 'cloud' | 'card' | 'list';
 
 export type Id = string;
 
 export interface UserPreferences {
   theme: string;
   viewMode: ViewMode;
+  bookmarkViewMode: BookmarkViewMode;
+  bookmarksPerContainer: number;
 }
 
 export interface User {

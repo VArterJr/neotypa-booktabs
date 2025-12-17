@@ -59,6 +59,7 @@ function authHtml(error: string | null): string {
 function appHtml(state: StoreState): string {
   const user = state.user!;
   const viewMode = user.preferences.viewMode;
+  const bookmarkViewMode = user.preferences.bookmarkViewMode;
 
   return `
 <div class="min-h-screen bg-base-200">
@@ -69,14 +70,43 @@ function appHtml(state: StoreState): string {
         <button class="btn btn-sm join-item ${viewMode === 'tabbed' ? 'btn-active' : ''}" data-action="set-view" data-view="tabbed">Tabbed</button>
         <button class="btn btn-sm join-item ${viewMode === 'hierarchical' ? 'btn-active' : ''}" data-action="set-view" data-view="hierarchical">Hierarchical</button>
       </div>
+      <div class="dropdown dropdown-end">
+        <button tabindex="0" class="btn btn-sm gap-1" title="Bookmark view mode">
+          ${getViewModeIcon(bookmarkViewMode)}
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box w-36 shadow z-10 text-sm">
+          <li><a data-action="set-bookmark-view" data-view="grid">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+            Grid
+          </a></li>
+          <li><a data-action="set-bookmark-view" data-view="cloud">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
+            Cloud
+          </a></li>
+          <li><a data-action="set-bookmark-view" data-view="card">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+            Card
+          </a></li>
+          <li><a data-action="set-bookmark-view" data-view="list">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+            List
+          </a></li>
+        </ul>
+      </div>
     </div>
     <div class="flex-none gap-2">
       <div class="dropdown dropdown-end">
-        <button tabindex="0" class="btn btn-sm btn-ghost gap-1" title="Export bookmarks">
+        <button tabindex="0" class="btn btn-sm btn-primary gap-1" title="Export bookmarks">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
           <span class="hidden sm:inline">Export</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
         </button>
         <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box w-52 shadow z-10">
           <li><a data-action="export-bookmarks-html">HTML (Netscape)</a></li>
@@ -84,11 +114,14 @@ function appHtml(state: StoreState): string {
         </ul>
       </div>
       <div class="dropdown dropdown-end">
-        <button tabindex="0" class="btn btn-sm btn-ghost gap-1" title="Import bookmarks">
+        <button tabindex="0" class="btn btn-sm btn-primary gap-1" title="Import bookmarks">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
           <span class="hidden sm:inline">Import</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
         </button>
         <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box w-52 shadow z-10">
           <li><a data-action="import-bookmarks-html">HTML (Netscape)</a></li>
@@ -120,6 +153,7 @@ function appHtml(state: StoreState): string {
 
 function tabbedHtml(state: StoreState): string {
   const { workspaces, folders, groups, bookmarks } = state.app;
+  const { bookmarkViewMode, bookmarksPerContainer } = state.user!.preferences;
   const selectedWorkspaceId = state.selectedWorkspaceId;
   const selectedFolderId = state.selectedFolderId;
 
@@ -165,7 +199,7 @@ function tabbedHtml(state: StoreState): string {
   const groupsHtml = selectedGroups
     .map((g) => {
       const bms = bookmarks.filter((b) => b.groupId === g.id).sort((a, b) => a.position - b.position);
-      return groupCardHtml(g, bms, { showFolderDrop: false });
+      return groupCardHtml(g, bms, { showFolderDrop: false, bookmarkViewMode, bookmarksPerContainer });
     })
     .join('');
 
@@ -198,6 +232,7 @@ function tabbedHtml(state: StoreState): string {
 
 function hierarchicalHtml(state: StoreState): string {
   const { workspaces, folders, groups, bookmarks } = state.app;
+  const { bookmarkViewMode, bookmarksPerContainer } = state.user!.preferences;
   const selectedWorkspaceId = state.selectedWorkspaceId;
   const selectedGroupId = state.selectedGroupId;
 
@@ -269,6 +304,9 @@ function hierarchicalHtml(state: StoreState): string {
     ? bookmarks.filter((b) => b.groupId === selectedGroupId).sort((a, b) => a.position - b.position)
     : [];
 
+  const displayedBookmarks = selectedBookmarks.slice(0, bookmarksPerContainer);
+  const hasMore = selectedBookmarks.length > bookmarksPerContainer;
+
   const selectedGroup = selectedGroupId ? groups.find((g) => g.id === selectedGroupId) ?? null : null;
 
   return `
@@ -298,11 +336,14 @@ function hierarchicalHtml(state: StoreState): string {
       <div class="card-body">
         <div class="flex items-center justify-between gap-2">
           <h2 class="card-title">${selectedGroup ? escapeHtml(selectedGroup.title) : 'Select a group'}</h2>
-          <button class="btn btn-sm" data-action="open-bookmark-create" ${selectedGroupId ? '' : 'disabled'}>+ Bookmark</button>
+          <div class="flex gap-2">
+            <button class="btn btn-sm" data-action="open-bookmark-create" ${selectedGroupId ? '' : 'disabled'}>+ Bookmark</button>
+          </div>
         </div>
         <div class="divider my-2"></div>
-        <div class="flex flex-col gap-2" id="bookmark-list" data-bookmark-group="${escapeHtml(selectedGroupId ?? '')}">
-          ${selectedGroupId ? (selectedBookmarks.map((b) => bookmarkRowHtml(b)).join('') || emptyStateHtml('No bookmarks in this group yet.')) : emptyStateHtml('Pick a group from the left.')}
+        <div class="bookmark-container" id="bookmark-list" data-bookmark-group="${escapeHtml(selectedGroupId ?? '')}">
+          ${selectedGroupId ? (renderBookmarksInMode(displayedBookmarks, bookmarkViewMode) || emptyStateHtml('No bookmarks in this group yet.')) : emptyStateHtml('Pick a group from the left.')}
+          ${hasMore ? `<div class="mt-2"><button class="btn btn-xs btn-ghost w-full" data-action="expand-bookmarks">Show ${selectedBookmarks.length - bookmarksPerContainer} more...</button></div>` : ''}
         </div>
       </div>
     </div>
@@ -311,7 +352,10 @@ function hierarchicalHtml(state: StoreState): string {
 `;
 }
 
-function groupCardHtml(group: Group, bookmarks: Bookmark[], opts: { showFolderDrop: boolean }): string {
+function groupCardHtml(group: Group, bookmarks: Bookmark[], opts: { showFolderDrop: boolean; bookmarkViewMode: string; bookmarksPerContainer: number }): string {
+  const displayedBookmarks = bookmarks.slice(0, opts.bookmarksPerContainer);
+  const hasMore = bookmarks.length > opts.bookmarksPerContainer;
+  
   return `
 <div class="card bg-base-100 shadow" draggable="true" data-dnd-kind="group" data-dnd-id="${escapeHtml(group.id)}" data-dnd-folder-id="${escapeHtml(group.folderId)}">
   <div class="card-body">
@@ -327,27 +371,129 @@ function groupCardHtml(group: Group, bookmarks: Bookmark[], opts: { showFolderDr
       <button class="btn btn-xs" data-action="open-bookmark-create" data-group-id="${escapeHtml(group.id)}">+ Bookmark</button>
     </div>
 
-    <div class="flex flex-col gap-2" data-bookmark-group="${escapeHtml(group.id)}">
-      ${bookmarks.map((b) => bookmarkRowHtml(b)).join('') || emptyStateHtml('No bookmarks.')}
+    <div class="bookmark-container" data-bookmark-group="${escapeHtml(group.id)}">
+      ${renderBookmarksInMode(displayedBookmarks, opts.bookmarkViewMode)}
+      ${hasMore ? `<div class="mt-2"><button class="btn btn-xs btn-ghost w-full" data-action="expand-bookmarks" data-group-id="${escapeHtml(group.id)}">Show ${bookmarks.length - opts.bookmarksPerContainer} more...</button></div>` : ''}
+      ${bookmarks.length === 0 ? emptyStateHtml('No bookmarks.') : ''}
     </div>
   </div>
 </div>
 `;
 }
 
-function bookmarkRowHtml(b: Bookmark): string {
-  const tags = b.tags.map((t) => `<span class="badge badge-outline">${escapeHtml(t)}</span>`).join(' ');
+function getViewModeIcon(mode: string): string {
+  const icons = {
+    grid: '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>',
+    cloud: '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>',
+    card: '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>',
+    list: '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>'
+  };
+  return icons[mode as keyof typeof icons] || icons.card;
+}
+
+function renderBookmarksInMode(bookmarks: Bookmark[], mode: string): string {
+  if (bookmarks.length === 0) return '';
+  
+  switch (mode) {
+    case 'grid':
+      return bookmarksGridHtml(bookmarks);
+    case 'cloud':
+      return bookmarksCloudHtml(bookmarks);
+    case 'list':
+      return bookmarksListHtml(bookmarks);
+    case 'card':
+    default:
+      return `<div class="flex flex-wrap gap-3">${bookmarks.map((b) => bookmarkRowHtml(b)).join('')}</div>`;
+  }
+}
+
+function bookmarksGridHtml(bookmarks: Bookmark[]): string {
   return `
-<div class="p-3 rounded-box bg-base-200" draggable="true" data-dnd-kind="bookmark" data-dnd-id="${escapeHtml(b.id)}" data-dnd-group-id="${escapeHtml(b.groupId)}">
-  <div class="flex items-start justify-between gap-2">
-    <div class="min-w-0">
-      <a class="link link-primary font-medium break-all" href="${escapeHtml(b.url)}" target="_blank" rel="noreferrer">${escapeHtml(b.title || b.url)}</a>
-      ${b.description ? `<div class="text-sm opacity-80 mt-1">${escapeHtml(b.description)}</div>` : ''}
-      ${tags ? `<div class="flex flex-wrap gap-1 mt-2">${tags}</div>` : ''}
+<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+  ${bookmarks.map((b) => {
+    const tags = b.tags.map((t) => `<span class="badge badge-xs">${escapeHtml(t)}</span>`).join(' ');
+    return `
+    <div class="card card-bordered card-compact bg-base-100 shadow-sm hover:shadow-md transition-shadow" draggable="true" data-dnd-kind="bookmark" data-dnd-id="${escapeHtml(b.id)}" data-dnd-group-id="${escapeHtml(b.groupId)}">
+      <div class="card-body items-center text-center gap-1">
+        <a class="link link-primary text-sm font-medium truncate w-full" href="${escapeHtml(b.url)}" target="_blank" rel="noreferrer" title="${escapeHtml(b.title || b.url)}">${escapeHtml(b.title || b.url)}</a>
+        ${tags ? `<div class="flex flex-wrap gap-1 justify-center">${tags}</div>` : ''}
+        <div class="flex gap-1 mt-1">
+          <button class="btn btn-xs btn-ghost" data-action="open-bookmark-edit" data-bookmark-id="${escapeHtml(b.id)}">✏️</button>
+          <button class="btn btn-xs btn-ghost" data-action="delete-bookmark" data-bookmark-id="${escapeHtml(b.id)}">🗑️</button>
+        </div>
+      </div>
     </div>
-    <div class="flex flex-col gap-1 flex-none">
-      <button class="btn btn-xs" data-action="open-bookmark-edit" data-bookmark-id="${escapeHtml(b.id)}">Edit</button>
-      <button class="btn btn-xs btn-ghost" data-action="delete-bookmark" data-bookmark-id="${escapeHtml(b.id)}">Delete</button>
+    `;
+  }).join('')}
+</div>
+`;
+}
+
+function bookmarksCloudHtml(bookmarks: Bookmark[]): string {
+  return `
+<div class="flex flex-wrap gap-2 p-2" draggable="false">
+  ${bookmarks.map((b) => `
+    <div class="inline-flex items-center gap-1" draggable="true" data-dnd-kind="bookmark" data-dnd-id="${escapeHtml(b.id)}" data-dnd-group-id="${escapeHtml(b.groupId)}">
+      <a class="link link-primary text-sm" href="${escapeHtml(b.url)}" target="_blank" rel="noreferrer">${escapeHtml(b.title || b.url)}</a>
+      <div class="dropdown dropdown-end">
+        <button tabindex="0" class="btn btn-xs btn-ghost">⋮</button>
+        <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box w-32 shadow z-10 text-xs">
+          <li><a data-action="open-bookmark-edit" data-bookmark-id="${escapeHtml(b.id)}">Edit</a></li>
+          <li><a data-action="delete-bookmark" data-bookmark-id="${escapeHtml(b.id)}">Delete</a></li>
+        </ul>
+      </div>
+    </div>
+  `).join('')}
+</div>
+`;
+}
+
+function bookmarksListHtml(bookmarks: Bookmark[]): string {
+  return `
+<div class="overflow-x-auto">
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th>Link</th>
+        <th>Description</th>
+        <th>Tags</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      ${bookmarks.map((b) => {
+        const tags = b.tags.map((t) => `<span class="badge badge-xs">${escapeHtml(t)}</span>`).join(' ');
+        return `
+        <tr draggable="true" data-dnd-kind="bookmark" data-dnd-id="${escapeHtml(b.id)}" data-dnd-group-id="${escapeHtml(b.groupId)}">
+          <td><a class="link link-primary text-sm" href="${escapeHtml(b.url)}" target="_blank" rel="noreferrer">${escapeHtml(b.title || b.url)}</a></td>
+          <td class="text-sm opacity-80">${escapeHtml(b.description)}</td>
+          <td>${tags}</td>
+          <td>
+            <div class="flex gap-1">
+              <button class="btn btn-xs" data-action="open-bookmark-edit" data-bookmark-id="${escapeHtml(b.id)}">Edit</button>
+              <button class="btn btn-xs btn-ghost" data-action="delete-bookmark" data-bookmark-id="${escapeHtml(b.id)}">Delete</button>
+            </div>
+          </td>
+        </tr>
+        `;
+      }).join('')}
+    </tbody>
+  </table>
+</div>
+`;
+}
+
+function bookmarkRowHtml(b: Bookmark): string {
+  const tags = b.tags.map((t) => `<span class="badge badge-outline badge-sm">${escapeHtml(t)}</span>`).join(' ');
+  return `
+<div class="card card-bordered bg-base-100 shadow-xl w-64" draggable="true" data-dnd-kind="bookmark" data-dnd-id="${escapeHtml(b.id)}" data-dnd-group-id="${escapeHtml(b.groupId)}">
+  <div class="card-body">
+    <a class="link link-primary font-semibold break-words" href="${escapeHtml(b.url)}" target="_blank" rel="noreferrer">${escapeHtml(b.title || b.url)}</a>
+    ${b.description ? `<p class="text-sm opacity-70">${escapeHtml(b.description)}</p>` : ''}
+    ${tags ? `<div class="flex flex-wrap gap-1">${tags}</div>` : ''}
+    <div class="card-actions justify-end">
+      <button class="btn btn-xs btn-ghost" data-action="open-bookmark-edit" data-bookmark-id="${escapeHtml(b.id)}">Edit</button>
+      <button class="btn btn-xs btn-ghost text-error" data-action="delete-bookmark" data-bookmark-id="${escapeHtml(b.id)}">Delete</button>
     </div>
   </div>
 </div>
@@ -884,6 +1030,24 @@ function wireBookmarksDnD(root: HTMLElement, state: StoreState, store: AppStore)
 }
 
 function wireModals(root: HTMLElement, state: StoreState, store: AppStore): void {
+  // Bookmark view mode selector
+  qsa<HTMLElement>(root, '[data-action="set-bookmark-view"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const view = btn.dataset.view as 'grid' | 'cloud' | 'card' | 'list';
+      if (view) {
+        await store.setBookmarkViewMode(view);
+      }
+    });
+  });
+
+  // Expand bookmarks button
+  qsa<HTMLElement>(root, '[data-action="expand-bookmarks"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      // Set a high limit to show all bookmarks
+      await store.setBookmarksPerContainer(1000);
+    });
+  });
+
   // Workspace modals
   qsa<HTMLElement>(root, '[data-action="open-workspace-create"]').forEach((btn) => {
     btn.addEventListener('click', () => openWorkspaceModal(root, { mode: 'create' }));
