@@ -9,24 +9,30 @@ import {
   createFolder,
   createGroup,
   createUser,
+  createWorkspace,
   deleteBookmark,
   deleteFolder,
   deleteGroup,
+  deleteWorkspace,
   findUserByUsername,
   getState,
   getUserById,
   moveBookmarkToGroup,
+  moveFolderToWorkspace,
   moveGroupToFolder,
   reorderBookmarksInGroup,
   reorderFolders,
   reorderGroupsInFolder,
+  reorderWorkspaces,
   updateBookmark,
   updateFolder,
   updateGroup,
-  updatePreferences
+  updatePreferences,
+  updateWorkspace
 } from '../db/queries.js';
-import { descriptionSchema, parseOrThrow, passwordSchema, tagsSchema, titleSchema, urlSchema, usernameSchema } from './validation.js';
+import { descriptionSchema, parseOrThrow, passwordSchema, tagsSchema, titleSchema, urlSchema, usernameSchema, importStrategySchema, importHtmlSchema } from './validation.js';
 import type { UserPreferences, ViewMode } from '@app/shared';
+import { exportToNetscape, importFromNetscape, type ImportOptions } from './import-export.js';
 
 export function registerApiRoutes(router: Router, dbFile: SqliteFileDb): void {
   router.on('GET', '/api/me', async (req, res) => {
@@ -107,12 +113,45 @@ export function registerApiRoutes(router: Router, dbFile: SqliteFileDb): void {
     sendJson(res, 200, prefs);
   });
 
+  // Workspaces
+  router.on('POST', '/api/workspaces', async (req, res) => {
+    const userId = await requireUserId(dbFile, req);
+    const body = await readJson<any>(req);
+    const title = parseOrThrow(titleSchema, body.title);
+    const workspace = await dbFile.withWrite((db) => createWorkspace(db, userId, title));
+    sendJson(res, 201, workspace);
+  });
+
+  router.on('PUT', '/api/workspaces/:id', async (req, res, params) => {
+    const userId = await requireUserId(dbFile, req);
+    const body = await readJson<any>(req);
+    const title = parseOrThrow(titleSchema, body.title);
+    const workspace = await dbFile.withWrite((db) => updateWorkspace(db, userId, params.id, title));
+    sendJson(res, 200, workspace);
+  });
+
+  router.on('DELETE', '/api/workspaces/:id', async (req, res, params) => {
+    const userId = await requireUserId(dbFile, req);
+    await dbFile.withWrite((db) => deleteWorkspace(db, userId, params.id));
+    sendNoContent(res);
+  });
+
+  router.on('PUT', '/api/workspaces/reorder', async (req, res) => {
+    const userId = await requireUserId(dbFile, req);
+    const body = await readJson<any>(req);
+    const orderedIds = Array.isArray(body.orderedIds) ? body.orderedIds.map(String) : null;
+    if (!orderedIds) throw new Error('orderedIds required');
+    await dbFile.withWrite((db) => reorderWorkspaces(db, userId, orderedIds));
+    sendNoContent(res);
+  });
+
   // Folders
   router.on('POST', '/api/folders', async (req, res) => {
     const userId = await requireUserId(dbFile, req);
     const body = await readJson<any>(req);
+    const workspaceId = String(body.workspaceId ?? '');
     const title = parseOrThrow(titleSchema, body.title);
-    const folder = await dbFile.withWrite((db) => createFolder(db, userId, title));
+    const folder = await dbFile.withWrite((db) => createFolder(db, userId, workspaceId, title));
     sendJson(res, 201, folder);
   });
 
@@ -133,9 +172,20 @@ export function registerApiRoutes(router: Router, dbFile: SqliteFileDb): void {
   router.on('PUT', '/api/folders/reorder', async (req, res) => {
     const userId = await requireUserId(dbFile, req);
     const body = await readJson<any>(req);
+    const workspaceId = String(body.workspaceId ?? '');
     const orderedIds = Array.isArray(body.orderedIds) ? body.orderedIds.map(String) : null;
     if (!orderedIds) throw new Error('orderedIds required');
-    await dbFile.withWrite((db) => reorderFolders(db, userId, orderedIds));
+    await dbFile.withWrite((db) => reorderFolders(db, userId, workspaceId, orderedIds));
+    sendNoContent(res);
+  });
+
+  router.on('PUT', '/api/folders/:id/move', async (req, res, params) => {
+    const userId = await requireUserId(dbFile, req);
+    const body = await readJson<any>(req);
+    const workspaceId = String(body.workspaceId ?? '');
+    const orderedIds = Array.isArray(body.orderedIds) ? body.orderedIds.map(String) : null;
+    if (!orderedIds) throw new Error('orderedIds required');
+    await dbFile.withWrite((db) => moveFolderToWorkspace(db, userId, params.id, workspaceId, orderedIds));
     sendNoContent(res);
   });
 
@@ -233,6 +283,40 @@ export function registerApiRoutes(router: Router, dbFile: SqliteFileDb): void {
     if (!orderedIds) throw new Error('orderedIds required');
     await dbFile.withWrite((db) => moveBookmarkToGroup(db, userId, params.id, groupId, orderedIds));
     sendNoContent(res);
+  });
+
+  // Import/Export
+  router.on('GET', '/api/export', async (req, res) => {
+    const userId = await requireUserId(dbFile, req);
+    const state = await dbFile.withRead((db) => getState(db, userId));
+    
+    const html = exportToNetscape(state.workspaces, state.folders, state.groups, state.bookmarks);
+    
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="bookmarks.html"');
+    res.writeHead(200);
+    res.end(html);
+  });
+
+  router.on('POST', '/api/import', async (req, res) => {
+    const userId = await requireUserId(dbFile, req);
+    const body = await readJson<any>(req);
+    
+    const html = parseOrThrow(importHtmlSchema, body.html);
+    const strategy = body.strategy ? parseOrThrow(importStrategySchema, body.strategy) : 'flatten';
+    
+    const options: ImportOptions = {
+      strategy,
+      rootFolderName: typeof body.rootFolderName === 'string' 
+        ? body.rootFolderName 
+        : 'Imported Bookmarks'
+    };
+
+    const result = await dbFile.withWrite((db) => 
+      importFromNetscape(db, userId, html, options)
+    );
+
+    sendJson(res, 200, result);
   });
 }
 

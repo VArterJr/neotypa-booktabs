@@ -26,13 +26,24 @@ CREATE TABLE IF NOT EXISTS sessions (
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS folders (
+CREATE TABLE IF NOT EXISTS workspaces (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   title TEXT NOT NULL,
   position INTEGER NOT NULL,
   created_at TEXT NOT NULL,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS folders (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS groups (
@@ -76,7 +87,8 @@ CREATE TABLE IF NOT EXISTS bookmark_tags (
   FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_folders_user_pos ON folders(user_id, position);
+CREATE INDEX IF NOT EXISTS idx_workspaces_user_pos ON workspaces(user_id, position);
+CREATE INDEX IF NOT EXISTS idx_folders_workspace_pos ON folders(workspace_id, position);
 CREATE INDEX IF NOT EXISTS idx_groups_folder_pos ON groups(folder_id, position);
 CREATE INDEX IF NOT EXISTS idx_bookmarks_group_pos ON bookmarks(group_id, position);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);

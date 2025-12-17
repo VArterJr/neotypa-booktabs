@@ -1,9 +1,11 @@
-import type { Bookmark, Folder, Group, ViewMode } from '@app/shared';
+import type { Bookmark, Folder, Group, ViewMode, ImportResult } from '@app/shared';
 import type { StoreState } from '../state/store';
 import { AppStore } from '../state/store';
 import { DAISY_THEMES } from '../daisyThemes';
 import { allowDrop, getDragPayload, setDragPayload } from './dnd';
 import { escapeHtml, qs, qsa } from './util';
+import { BASE_PATH } from '../config.js';
+import { apiFetch } from '../api/http.js';
 
 export function renderApp(root: HTMLElement, state: StoreState, store: AppStore): void {
   if (!state.user) {
@@ -69,6 +71,18 @@ function appHtml(state: StoreState): string {
       </div>
     </div>
     <div class="flex-none gap-2">
+      <button class="btn btn-sm btn-ghost gap-1" data-action="export-bookmarks" title="Export bookmarks">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        <span class="hidden sm:inline">Export</span>
+      </button>
+      <button class="btn btn-sm btn-ghost gap-1" data-action="import-bookmarks" title="Import bookmarks">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        </svg>
+        <span class="hidden sm:inline">Import</span>
+      </button>
       <select id="theme-select" class="select select-bordered select-sm w-40">
         ${DAISY_THEMES.map((t) => `<option value="${escapeHtml(t)}" ${t === user.preferences.theme ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('')}
       </select>
@@ -93,10 +107,31 @@ function appHtml(state: StoreState): string {
 }
 
 function tabbedHtml(state: StoreState): string {
-  const { folders, groups, bookmarks } = state.app;
+  const { workspaces, folders, groups, bookmarks } = state.app;
+  const selectedWorkspaceId = state.selectedWorkspaceId;
   const selectedFolderId = state.selectedFolderId;
 
-  const folderTabs = folders
+  // Workspace tabs
+  const workspaceTabs = workspaces
+    .sort((a, b) => a.position - b.position)
+    .map((w) => {
+      const active = w.id === selectedWorkspaceId;
+      return `
+        <a
+          class="tab ${active ? 'tab-active' : ''}"
+          role="tab"
+          data-action="select-workspace"
+          data-workspace-id="${escapeHtml(w.id)}"
+          draggable="true"
+          data-dnd-kind="workspace"
+          data-dnd-id="${escapeHtml(w.id)}"
+        >${escapeHtml(w.title)}</a>`;
+    })
+    .join('');
+
+  // Folder tabs (filtered by selected workspace)
+  const workspaceFolders = selectedWorkspaceId ? folders.filter((f) => f.workspaceId === selectedWorkspaceId) : [];
+  const folderTabs = workspaceFolders
     .sort((a, b) => a.position - b.position)
     .map((f) => {
       const active = f.id === selectedFolderId;
@@ -124,9 +159,17 @@ function tabbedHtml(state: StoreState): string {
 
   return `
 <div class="flex flex-col gap-2 mb-4">
+  <div role="tablist" class="tabs tabs-boxed overflow-x-auto" id="workspace-tabs">
+    ${workspaceTabs}
+    <a class="tab" role="tab" data-action="open-workspace-create">+ Workspace</a>
+  </div>
+  <div class="flex items-center justify-end gap-2">
+    <button class="btn btn-xs" data-action="open-workspace-edit" ${selectedWorkspaceId ? '' : 'disabled'}>Edit workspace</button>
+    <button class="btn btn-xs btn-ghost" data-action="delete-workspace" ${selectedWorkspaceId ? '' : 'disabled'}>Delete workspace</button>
+  </div>
   <div role="tablist" class="tabs tabs-boxed overflow-x-auto" id="folder-tabs">
     ${folderTabs}
-    <a class="tab" role="tab" data-action="open-folder-create">+ Folder</a>
+    <a class="tab" role="tab" data-action="open-folder-create" ${selectedWorkspaceId ? '' : 'disabled'}>+ Folder</a>
   </div>
   <div class="flex items-center justify-end gap-2">
     <button class="btn btn-sm" data-action="open-folder-edit" ${selectedFolderId ? '' : 'disabled'}>Edit folder</button>
@@ -142,10 +185,32 @@ function tabbedHtml(state: StoreState): string {
 }
 
 function hierarchicalHtml(state: StoreState): string {
-  const { folders, groups, bookmarks } = state.app;
+  const { workspaces, folders, groups, bookmarks } = state.app;
+  const selectedWorkspaceId = state.selectedWorkspaceId;
   const selectedGroupId = state.selectedGroupId;
 
-  const folderBlocks = folders
+  // Workspace tabs
+  const workspaceTabs = workspaces
+    .sort((a, b) => a.position - b.position)
+    .map((w) => {
+      const active = w.id === selectedWorkspaceId;
+      return `
+        <a
+          class="tab ${active ? 'tab-active' : ''}"
+          role="tab"
+          data-action="select-workspace"
+          data-workspace-id="${escapeHtml(w.id)}"
+          draggable="true"
+          data-dnd-kind="workspace"
+          data-dnd-id="${escapeHtml(w.id)}"
+        >${escapeHtml(w.title)}</a>`;
+    })
+    .join('');
+
+  // Filter folders by selected workspace
+  const workspaceFolders = selectedWorkspaceId ? folders.filter((f) => f.workspaceId === selectedWorkspaceId) : [];
+
+  const folderBlocks = workspaceFolders
     .sort((a, b) => a.position - b.position)
     .map((f) => {
       const gs = groups.filter((g) => g.folderId === f.id).sort((a, b) => a.position - b.position);
@@ -195,10 +260,20 @@ function hierarchicalHtml(state: StoreState): string {
   const selectedGroup = selectedGroupId ? groups.find((g) => g.id === selectedGroupId) ?? null : null;
 
   return `
+<div class="flex flex-col gap-2 mb-4">
+  <div role="tablist" class="tabs tabs-boxed overflow-x-auto" id="workspace-tabs">
+    ${workspaceTabs}
+    <a class="tab" role="tab" data-action="open-workspace-create">+ Workspace</a>
+  </div>
+  <div class="flex items-center justify-end gap-2">
+    <button class="btn btn-xs" data-action="open-workspace-edit" ${selectedWorkspaceId ? '' : 'disabled'}>Edit workspace</button>
+    <button class="btn btn-xs btn-ghost" data-action="delete-workspace" ${selectedWorkspaceId ? '' : 'disabled'}>Delete workspace</button>
+  </div>
+</div>
 <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
   <aside class="md:col-span-4 lg:col-span-3 flex flex-col gap-3">
     <div class="flex gap-2">
-      <button class="btn btn-sm" data-action="open-folder-create">+ Folder</button>
+      <button class="btn btn-sm" data-action="open-folder-create" ${selectedWorkspaceId ? '' : 'disabled'}>+ Folder</button>
       <button class="btn btn-sm" data-action="open-folder-edit" ${state.selectedFolderId ? '' : 'disabled'}>Edit</button>
       <button class="btn btn-sm btn-ghost" data-action="delete-folder" ${state.selectedFolderId ? '' : 'disabled'}>Delete</button>
     </div>
@@ -273,6 +348,24 @@ function emptyStateHtml(text: string): string {
 
 function modalsHtml(): string {
   return `
+<dialog id="modal-workspace" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg" id="modal-workspace-title">Workspace</h3>
+    <form method="dialog" class="mt-4 flex flex-col gap-3" id="modal-workspace-form">
+      <input type="hidden" name="mode" />
+      <input type="hidden" name="id" />
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Title</span></div>
+        <input name="title" class="input input-bordered w-full" required />
+      </label>
+      <div class="modal-action">
+        <button type="button" class="btn" value="cancel">Cancel</button>
+        <button class="btn btn-primary" value="ok">Save</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
 <dialog id="modal-folder" class="modal">
   <div class="modal-box">
     <h3 class="font-bold text-lg" id="modal-folder-title">Folder</h3>
@@ -282,6 +375,11 @@ function modalsHtml(): string {
       <label class="form-control w-full">
         <div class="label"><span class="label-text">Title</span></div>
         <input name="title" class="input input-bordered w-full" required />
+      </label>
+      <label class="form-control w-full" id="folder-workspace-selector-container">
+        <div class="label"><span class="label-text">Workspace</span></div>
+        <select name="workspaceId" class="select select-bordered w-full" id="folder-workspace-selector">
+        </select>
       </label>
       <div class="modal-action">
         <button type="button" class="btn" value="cancel">Cancel</button>
@@ -297,10 +395,14 @@ function modalsHtml(): string {
     <form method="dialog" class="mt-4 flex flex-col gap-3" id="modal-group-form">
       <input type="hidden" name="mode" />
       <input type="hidden" name="id" />
-      <input type="hidden" name="folderId" />
       <label class="form-control w-full">
         <div class="label"><span class="label-text">Title</span></div>
         <input name="title" class="input input-bordered w-full" required />
+      </label>
+      <label class="form-control w-full" id="group-folder-selector-container">
+        <div class="label"><span class="label-text">Folder</span></div>
+        <select name="folderId" class="select select-bordered w-full" id="group-folder-selector">
+        </select>
       </label>
       <div class="modal-action">
         <button type="button" class="btn" value="cancel">Cancel</button>
@@ -340,6 +442,48 @@ function modalsHtml(): string {
     </form>
   </div>
 </dialog>
+
+<dialog id="modal-import" class="modal">
+  <div class="modal-box max-w-2xl">
+    <h3 class="font-bold text-lg">Import Bookmarks</h3>
+    <div class="mt-4 flex flex-col gap-4">
+      <div class="alert alert-info">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <div>
+          <p class="text-sm">Import bookmarks in Netscape HTML format (exported from most browsers and Start.me).</p>
+          <p class="text-sm mt-1"><strong>Note:</strong> Our structure is: Workspace → Folder (Tab Book) → Group (Tab) → Bookmark</p>
+        </div>
+      </div>
+      
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Select bookmark file</span></div>
+        <input type="file" id="import-file-input" accept=".html,.htm" class="file-input file-input-bordered w-full" />
+      </label>
+
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">How to handle deeply nested folders?</span></div>
+        <select id="import-strategy" class="select select-bordered w-full">
+          <option value="flatten">Flatten - Convert deeper folders into groups</option>
+          <option value="skip">Skip - Ignore bookmarks in folders deeper than supported</option>
+        </select>
+        <div class="label">
+          <span class="label-text-alt">Choose how to handle bookmarks in folders nested deeper than 3 levels</span>
+        </div>
+      </label>
+
+      <div id="import-result" class="hidden">
+        <div class="alert" id="import-result-alert">
+          <div id="import-result-content"></div>
+        </div>
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn" id="import-cancel-btn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="import-submit-btn">Import</button>
+      </div>
+    </div>
+  </div>
+</dialog>
 `;
 }
 
@@ -375,7 +519,48 @@ function wireHeader(root: HTMLElement, state: StoreState, store: AppStore): void
     });
   });
 
+  // Export bookmarks
+  qsa<HTMLElement>(root, '[data-action="export-bookmarks"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        const response = await fetch(`${BASE_PATH}/api/export`, {
+          credentials: 'same-origin'
+        });
+        
+        if (!response.ok) {
+          throw new Error('Export failed');
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bookmarks-${new Date().toISOString().split('T')[0]}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        alert(`Export failed: ${err}`);
+      }
+    });
+  });
+
+  // Import bookmarks
+  qsa<HTMLElement>(root, '[data-action="import-bookmarks"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      openImportModal(root, store);
+    });
+  });
+
   // Generic click handling for selections
+  qsa<HTMLElement>(root, '[data-action="select-workspace"]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const workspaceId = el.dataset.workspaceId;
+      if (workspaceId) store.selectWorkspace(workspaceId);
+    });
+  });
+
   qsa<HTMLElement>(root, '[data-action="select-folder"]').forEach((el) => {
     el.addEventListener('click', () => {
       const folderId = el.dataset.folderId;
@@ -387,6 +572,51 @@ function wireHeader(root: HTMLElement, state: StoreState, store: AppStore): void
     el.addEventListener('click', () => {
       const groupId = el.dataset.groupId;
       if (groupId) store.selectGroup(groupId);
+    });
+  });
+
+  // Workspace DnD reorder
+  qsa<HTMLElement>(root, '[data-dnd-kind="workspace"]').forEach((el) => {
+    el.addEventListener('dragstart', (ev) => setDragPayload(ev as DragEvent, { kind: 'workspace', id: el.dataset.dndId! }));
+    el.addEventListener('dragover', (ev) => {
+      const payload = getDragPayload(ev as DragEvent);
+      // Allow workspace reordering OR folder drops
+      if (payload && (payload.kind === 'workspace' || payload.kind === 'folder')) {
+        allowDrop(ev as DragEvent);
+      }
+    });
+    el.addEventListener('drop', async (ev) => {
+      const payload = getDragPayload(ev as DragEvent);
+      if (!payload) return;
+      (ev as DragEvent).preventDefault();
+
+      if (payload.kind === 'workspace') {
+        // Reorder workspaces
+        const targetId = el.dataset.dndId!;
+        if (payload.id === targetId) return;
+
+        const tabs = qsa<HTMLElement>(root, '[data-dnd-kind="workspace"]');
+        const ids = tabs.map((t) => t.dataset.dndId!).filter(Boolean);
+        const from = ids.indexOf(payload.id);
+        const to = ids.indexOf(targetId);
+        if (from < 0 || to < 0) return;
+        ids.splice(from, 1);
+        ids.splice(to, 0, payload.id);
+        await store.reorderWorkspaces(ids);
+      } else if (payload.kind === 'folder') {
+        // Move folder to this workspace
+        const targetWorkspaceId = el.dataset.dndId!;
+        
+        // Get all folders in the target workspace
+        const foldersInWorkspace = state.app.folders
+          .filter((f) => f.workspaceId === targetWorkspaceId)
+          .sort((a, b) => a.position - b.position)
+          .map((f) => f.id);
+
+        // Add the dragged folder to the end
+        const orderedIds = [...foldersInWorkspace, payload.id];
+        await store.moveFolder(payload.id, targetWorkspaceId, orderedIds);
+      }
     });
   });
 
@@ -577,9 +807,33 @@ function wireBookmarksDnD(root: HTMLElement, state: StoreState, store: AppStore)
 }
 
 function wireModals(root: HTMLElement, state: StoreState, store: AppStore): void {
+  // Workspace modals
+  qsa<HTMLElement>(root, '[data-action="open-workspace-create"]').forEach((btn) => {
+    btn.addEventListener('click', () => openWorkspaceModal(root, { mode: 'create' }));
+  });
+
+  qsa<HTMLElement>(root, '[data-action="open-workspace-edit"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const workspaceId = state.selectedWorkspaceId;
+      if (!workspaceId) return;
+      const w = state.app.workspaces.find((x) => x.id === workspaceId);
+      if (!w) return;
+      openWorkspaceModal(root, { mode: 'edit', id: w.id, title: w.title });
+    });
+  });
+
+  qsa<HTMLElement>(root, '[data-action="delete-workspace"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const workspaceId = state.selectedWorkspaceId;
+      if (!workspaceId) return;
+      if (!confirm('Delete this workspace (and all its contents)?')) return;
+      await store.deleteWorkspace(workspaceId);
+    });
+  });
+
   // Open buttons
   qsa<HTMLElement>(root, '[data-action="open-folder-create"]').forEach((btn) => {
-    btn.addEventListener('click', () => openFolderModal(root, { mode: 'create' }));
+    btn.addEventListener('click', () => openFolderModal(root, state, { mode: 'create' }));
   });
 
   qsa<HTMLElement>(root, '[data-action="open-folder-edit"]').forEach((btn) => {
@@ -588,7 +842,7 @@ function wireModals(root: HTMLElement, state: StoreState, store: AppStore): void
       if (!folderId) return;
       const f = state.app.folders.find((x) => x.id === folderId);
       if (!f) return;
-      openFolderModal(root, { mode: 'edit', id: f.id, title: f.title });
+      openFolderModal(root, state, { mode: 'edit', id: f.id, title: f.title });
     });
   });
 
@@ -605,7 +859,7 @@ function wireModals(root: HTMLElement, state: StoreState, store: AppStore): void
     btn.addEventListener('click', () => {
       const folderId = btn.getAttribute('data-folder-id') ?? state.selectedFolderId;
       if (!folderId) return;
-      openGroupModal(root, { mode: 'create', folderId });
+      openGroupModal(root, state, { mode: 'create', folderId });
     });
   });
 
@@ -614,7 +868,7 @@ function wireModals(root: HTMLElement, state: StoreState, store: AppStore): void
       const id = btn.getAttribute('data-group-id')!;
       const group = state.app.groups.find((g) => g.id === id);
       if (!group) return;
-      openGroupModal(root, { mode: 'edit', id: group.id, folderId: group.folderId, title: group.title });
+      openGroupModal(root, state, { mode: 'edit', id: group.id, folderId: group.folderId, title: group.title });
     });
   });
 
@@ -665,35 +919,49 @@ function wireModals(root: HTMLElement, state: StoreState, store: AppStore): void
       const id = el.getAttribute('data-dnd-id')!;
       const g = state.app.groups.find((x) => x.id === id);
       if (!g) return;
-      openGroupModal(root, { mode: 'edit', id: g.id, folderId: g.folderId, title: g.title });
+      openGroupModal(root, state, { mode: 'edit', id: g.id, folderId: g.folderId, title: g.title });
     });
 
-    el.addEventListener('contextmenu', async (ev) => {
-      ev.preventDefault();
-      const id = el.getAttribute('data-dnd-id')!;
-      if (!confirm('Delete this group?')) return;
-      await store.deleteGroup(id);
-    });
+    // Right-click disabled to prevent accidental deletion
+    // Use double-click to edit, then delete from the edit modal if needed
   });
 
-  // Folder edit/delete is accessible via right-click for now: double click on tab/folder title.
+  // Folder edit/delete: double-click on folder title to edit
   qsa<HTMLElement>(root, '[data-dnd-kind="folder"]').forEach((el) => {
     el.addEventListener('dblclick', () => {
       const id = el.getAttribute('data-dnd-id')!;
       const f = state.app.folders.find((x) => x.id === id);
       if (!f) return;
-      openFolderModal(root, { mode: 'edit', id: f.id, title: f.title });
+      openFolderModal(root, state, { mode: 'edit', id: f.id, title: f.title });
     });
 
-    el.addEventListener('contextmenu', async (ev) => {
-      ev.preventDefault();
-      const id = el.getAttribute('data-dnd-id')!;
-      if (!confirm('Delete this folder (and its contents)?')) return;
-      await store.deleteFolder(id);
-    });
+    // Right-click disabled to prevent accidental deletion
+    // Use double-click to edit, then delete from the edit modal if needed
   });
 
   // Forms
+  const workspaceDialog = qs<HTMLDialogElement>(root, '#modal-workspace');
+  qs<HTMLButtonElement>(root, '#modal-workspace-form button[value="cancel"]').addEventListener('click', () => workspaceDialog.close());
+  qs<HTMLFormElement>(root, '#modal-workspace-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const submitter = (ev as SubmitEvent).submitter as HTMLButtonElement | null;
+    if (submitter?.value === 'cancel') {
+      workspaceDialog.close();
+      return;
+    }
+    const form = ev.target as HTMLFormElement;
+    const fd = new FormData(form);
+    const mode = String(fd.get('mode'));
+    const id = String(fd.get('id') ?? '');
+    const title = String(fd.get('title') ?? '').trim();
+    if (!title) return;
+
+    if (mode === 'create') await store.createWorkspace(title);
+    else await store.updateWorkspace(id, title);
+
+    workspaceDialog.close();
+  });
+
   const folderDialog = qs<HTMLDialogElement>(root, '#modal-folder');
   qs<HTMLButtonElement>(root, '#modal-folder-form button[value="cancel"]').addEventListener('click', () => folderDialog.close());
   qs<HTMLFormElement>(root, '#modal-folder-form').addEventListener('submit', async (ev) => {
@@ -708,10 +976,26 @@ function wireModals(root: HTMLElement, state: StoreState, store: AppStore): void
     const mode = String(fd.get('mode'));
     const id = String(fd.get('id') ?? '');
     const title = String(fd.get('title') ?? '').trim();
+    const newWorkspaceId = String(fd.get('workspaceId') ?? '');
     if (!title) return;
 
-    if (mode === 'create') await store.createFolder(title);
-    else await store.updateFolder(id, title);
+    if (mode === 'create') {
+      await store.createFolder(title);
+    } else {
+      await store.updateFolder(id, title);
+      
+      // Check if workspace changed
+      const folder = state.app.folders.find(f => f.id === id);
+      if (folder && newWorkspaceId && folder.workspaceId !== newWorkspaceId) {
+        // Move folder to new workspace
+        const foldersInWorkspace = state.app.folders
+          .filter((f) => f.workspaceId === newWorkspaceId)
+          .sort((a, b) => a.position - b.position)
+          .map((f) => f.id);
+        const orderedIds = [...foldersInWorkspace, id];
+        await store.moveFolder(id, newWorkspaceId, orderedIds);
+      }
+    }
 
     folderDialog.close();
   });
@@ -729,12 +1013,27 @@ function wireModals(root: HTMLElement, state: StoreState, store: AppStore): void
     const fd = new FormData(form);
     const mode = String(fd.get('mode'));
     const id = String(fd.get('id') ?? '');
-    const folderId = String(fd.get('folderId') ?? '');
+    const newFolderId = String(fd.get('folderId') ?? '');
     const title = String(fd.get('title') ?? '').trim();
-    if (!title || !folderId) return;
+    if (!title || !newFolderId) return;
 
-    if (mode === 'create') await store.createGroup(folderId, title);
-    else await store.updateGroup(id, title);
+    if (mode === 'create') {
+      await store.createGroup(newFolderId, title);
+    } else {
+      await store.updateGroup(id, title);
+      
+      // Check if folder changed
+      const group = state.app.groups.find(g => g.id === id);
+      if (group && group.folderId !== newFolderId) {
+        // Move group to new folder
+        const groupsInFolder = state.app.groups
+          .filter((g) => g.folderId === newFolderId)
+          .sort((a, b) => a.position - b.position)
+          .map((g) => g.id);
+        const orderedIds = [...groupsInFolder, id];
+        await store.moveGroup(id, newFolderId, orderedIds);
+      }
+    }
 
     groupDialog.close();
   });
@@ -770,10 +1069,10 @@ function wireModals(root: HTMLElement, state: StoreState, store: AppStore): void
   });
 }
 
-function openFolderModal(root: HTMLElement, data: { mode: 'create' } | { mode: 'edit'; id: string; title: string }): void {
-  const dialog = qs<HTMLDialogElement>(root, '#modal-folder');
-  const form = qs<HTMLFormElement>(root, '#modal-folder-form');
-  (qs<HTMLElement>(root, '#modal-folder-title')).textContent = data.mode === 'create' ? 'New folder' : 'Edit folder';
+function openWorkspaceModal(root: HTMLElement, data: { mode: 'create' } | { mode: 'edit'; id: string; title: string }): void {
+  const dialog = qs<HTMLDialogElement>(root, '#modal-workspace');
+  const form = qs<HTMLFormElement>(root, '#modal-workspace-form');
+  (qs<HTMLElement>(root, '#modal-workspace-title')).textContent = data.mode === 'create' ? 'New workspace' : 'Edit workspace';
 
   (form.elements.namedItem('mode') as HTMLInputElement).value = data.mode;
   (form.elements.namedItem('id') as HTMLInputElement).value = data.mode === 'edit' ? data.id : '';
@@ -782,8 +1081,37 @@ function openFolderModal(root: HTMLElement, data: { mode: 'create' } | { mode: '
   dialog.showModal();
 }
 
+function openFolderModal(root: HTMLElement, state: StoreState, data: { mode: 'create' } | { mode: 'edit'; id: string; title: string }): void {
+  const dialog = qs<HTMLDialogElement>(root, '#modal-folder');
+  const form = qs<HTMLFormElement>(root, '#modal-folder-form');
+  (qs<HTMLElement>(root, '#modal-folder-title')).textContent = data.mode === 'create' ? 'New folder' : 'Edit folder';
+
+  (form.elements.namedItem('mode') as HTMLInputElement).value = data.mode;
+  (form.elements.namedItem('id') as HTMLInputElement).value = data.mode === 'edit' ? data.id : '';
+  (form.elements.namedItem('title') as HTMLInputElement).value = data.mode === 'edit' ? data.title : '';
+
+  // Populate workspace selector (only show in edit mode)
+  const workspaceSelector = qs<HTMLSelectElement>(root, '#folder-workspace-selector');
+  const workspaceSelectorContainer = qs<HTMLElement>(root, '#folder-workspace-selector-container');
+  
+  if (data.mode === 'edit') {
+    const folder = state.app.folders.find(f => f.id === data.id);
+    const currentWorkspaceId = folder?.workspaceId || state.app.workspaces[0]?.id || '';
+    
+    workspaceSelector.innerHTML = state.app.workspaces
+      .map(w => `<option value="${w.id}" ${w.id === currentWorkspaceId ? 'selected' : ''}>${w.title}</option>`)
+      .join('');
+    workspaceSelectorContainer.style.display = '';
+  } else {
+    workspaceSelectorContainer.style.display = 'none';
+  }
+
+  dialog.showModal();
+}
+
 function openGroupModal(
   root: HTMLElement,
+  state: StoreState,
   data:
     | { mode: 'create'; folderId: string }
     | { mode: 'edit'; id: string; folderId: string; title: string }
@@ -794,8 +1122,43 @@ function openGroupModal(
 
   (form.elements.namedItem('mode') as HTMLInputElement).value = data.mode;
   (form.elements.namedItem('id') as HTMLInputElement).value = data.mode === 'edit' ? data.id : '';
-  (form.elements.namedItem('folderId') as HTMLInputElement).value = data.folderId;
   (form.elements.namedItem('title') as HTMLInputElement).value = data.mode === 'edit' ? data.title : '';
+
+  // Populate folder selector
+  const folderSelector = qs<HTMLSelectElement>(root, '#group-folder-selector');
+  const folderSelectorContainer = qs<HTMLElement>(root, '#group-folder-selector-container');
+  
+  const currentFolderId = data.folderId;
+  
+  // Group folders by workspace
+  const workspaceMap = new Map<string, typeof state.app.folders>();
+  for (const folder of state.app.folders) {
+    if (!workspaceMap.has(folder.workspaceId)) {
+      workspaceMap.set(folder.workspaceId, []);
+    }
+    workspaceMap.get(folder.workspaceId)!.push(folder);
+  }
+  
+  let options = '';
+  for (const workspace of state.app.workspaces) {
+    const folders = workspaceMap.get(workspace.id) || [];
+    if (folders.length > 0) {
+      options += `<optgroup label="${workspace.title}">`;
+      for (const folder of folders) {
+        options += `<option value="${folder.id}" ${folder.id === currentFolderId ? 'selected' : ''}>${folder.title}</option>`;
+      }
+      options += '</optgroup>';
+    }
+  }
+  
+  folderSelector.innerHTML = options;
+  
+  // Only show selector in edit mode
+  if (data.mode === 'edit') {
+    folderSelectorContainer.style.display = '';
+  } else {
+    folderSelectorContainer.style.display = 'none';
+  }
 
   dialog.showModal();
 }
@@ -817,6 +1180,104 @@ function openBookmarkModal(
   (form.elements.namedItem('title') as HTMLInputElement).value = data.mode === 'edit' ? data.title : '';
   (form.elements.namedItem('description') as HTMLTextAreaElement).value = data.mode === 'edit' ? data.description : '';
   (form.elements.namedItem('tags') as HTMLInputElement).value = data.mode === 'edit' ? data.tags : '';
+
+  dialog.showModal();
+}
+
+function openImportModal(root: HTMLElement, store: AppStore): void {
+  const dialog = qs<HTMLDialogElement>(root, '#modal-import');
+  const fileInput = qs<HTMLInputElement>(root, '#import-file-input');
+  const strategySelect = qs<HTMLSelectElement>(root, '#import-strategy');
+  const submitBtn = qs<HTMLButtonElement>(root, '#import-submit-btn');
+  const cancelBtn = qs<HTMLButtonElement>(root, '#import-cancel-btn');
+  const resultDiv = qs<HTMLElement>(root, '#import-result');
+  const resultAlert = qs<HTMLElement>(root, '#import-result-alert');
+  const resultContent = qs<HTMLElement>(root, '#import-result-content');
+
+  // Reset state
+  fileInput.value = '';
+  strategySelect.value = 'flatten';
+  resultDiv.classList.add('hidden');
+  submitBtn.disabled = false;
+
+  // Cancel button
+  cancelBtn.onclick = () => {
+    dialog.close();
+  };
+
+  // Submit button
+  submitBtn.onclick = async () => {
+    const file = fileInput.files?.[0];
+    if (!file) {
+      alert('Please select a file');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Importing...';
+
+    try {
+      const html = await file.text();
+      const strategy = strategySelect.value as 'flatten' | 'skip' | 'root';
+
+      const result = await apiFetch<ImportResult>('/api/import', {
+        method: 'POST',
+        body: JSON.stringify({ html, strategy })
+      });
+
+      // Show result
+      resultDiv.classList.remove('hidden');
+      
+      const hasWarnings = result.warnings.length > 0;
+      const hasSkipped = result.bookmarksSkipped > 0;
+      
+      if (hasWarnings || hasSkipped) {
+        resultAlert.className = 'alert alert-warning';
+      } else {
+        resultAlert.className = 'alert alert-success';
+      }
+
+      let summary = `
+        <div class="font-semibold mb-2">Import completed!</div>
+        <ul class="text-sm space-y-1">
+          <li>✓ Created ${result.foldersCreated} folders</li>
+          <li>✓ Created ${result.groupsCreated} groups</li>
+          <li>✓ Imported ${result.bookmarksCreated} bookmarks</li>
+          ${hasSkipped ? `<li>⚠ Skipped ${result.bookmarksSkipped} bookmarks</li>` : ''}
+        </ul>
+      `;
+
+      if (hasWarnings) {
+        summary += `
+          <div class="mt-3">
+            <div class="font-semibold text-sm">Warnings:</div>
+            <ul class="text-xs mt-1 space-y-1 max-h-32 overflow-y-auto">
+              ${result.warnings.map(w => `<li>• ${escapeHtml(w)}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      resultContent.innerHTML = summary;
+
+      // Reload state
+      await store.refreshState();
+
+      // Change buttons
+      submitBtn.classList.add('hidden');
+      cancelBtn.textContent = 'Close';
+    } catch (err) {
+      resultDiv.classList.remove('hidden');
+      resultAlert.className = 'alert alert-error';
+      resultContent.innerHTML = `
+        <div class="font-semibold">Import failed</div>
+        <div class="text-sm mt-1">${escapeHtml(String(err))}</div>
+      `;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Import';
+    }
+  };
 
   dialog.showModal();
 }

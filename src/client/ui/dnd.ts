@@ -1,4 +1,5 @@
 export type DragPayload =
+  | { kind: 'workspace'; id: string }
   | { kind: 'folder'; id: string }
   | { kind: 'group'; id: string; folderId: string }
   | { kind: 'bookmark'; id: string; groupId: string };

@@ -707,6 +707,10 @@ Use this checklist for each deployment:
   cp data/app.sqlite data/app.sqlite.backup-$(date +%Y%m%d-%H%M)
   ```
 - [ ] **Build on dev machine**: `npm run build`
+- [ ] **⚠️ IMPORTANT: If deploying to subdirectory, update base-path in `dist/client/index.html`**
+  - Edit the meta tag: `<meta name="base-path" content="/apps/ntbt" />`
+  - Use `/` for root deployment, or your subdirectory path (e.g., `/apps/ntbt`)
+  - **This must be done after each build if not deploying to root**
 - [ ] **Test locally**: `npm start` and verify it works
 - [ ] **Upload to server**: `scp` or `tar + upload`
 - [ ] **Update dependencies** (if package.json changed): `npm install --production`

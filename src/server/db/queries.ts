@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Database } from 'sql.js';
-import type { AppState, Bookmark, Folder, Group, User, UserPreferences, ViewMode } from '@app/shared';
+import type { AppState, Bookmark, Folder, Group, User, UserPreferences, ViewMode, Workspace } from '@app/shared';
 import { all, nowIso, one, run } from './util.js';
 
 /**
@@ -41,8 +41,9 @@ export function createUser(db: Database, username: string, password: string): Us
     'tabbed',
     now
   ]);
-  // Seed with a starter folder/group so the UI isn't empty.
-  const folder = createFolder(db, id, 'Main');
+  // Seed with a starter workspace, folder, and group so the UI isn't empty.
+  const workspace = createWorkspace(db, id, 'Personal');
+  const folder = createFolder(db, id, workspace.id, 'Main');
   createGroup(db, id, folder.id, 'Links');
   return one([getUserById(db, id)!]);
 }
@@ -57,7 +58,8 @@ export function updatePreferences(db: Database, userId: string, patch: Partial<U
 }
 
 export function getState(db: Database, userId: string): AppState {
-  const folders = all<any>(db, 'SELECT id, user_id, title, position FROM folders WHERE user_id = ? ORDER BY position ASC', [userId]).map(toFolder);
+  const workspaces = all<any>(db, 'SELECT id, user_id, title, position FROM workspaces WHERE user_id = ? ORDER BY position ASC', [userId]).map(toWorkspace);
+  const folders = all<any>(db, 'SELECT id, user_id, workspace_id, title, position FROM folders WHERE user_id = ? ORDER BY position ASC', [userId]).map(toFolder);
   const groups = all<any>(db, 'SELECT id, user_id, folder_id, title, position FROM groups WHERE user_id = ? ORDER BY position ASC', [userId]).map(toGroup);
 
   const bookmarksRaw = all<any>(
@@ -94,20 +96,51 @@ export function getState(db: Database, userId: string): AppState {
     tags: (tagsByBookmark.get(b.id) ?? []).sort((a, b2) => a.localeCompare(b2))
   }));
 
-  return { folders, groups, bookmarks };
+  return { workspaces, folders, groups, bookmarks };
 }
 
-export function createFolder(db: Database, userId: string, title: string): Folder {
+// Workspaces
+export function createWorkspace(db: Database, userId: string, title: string): Workspace {
   const id = randomUUID();
-  const pos = nextPosition(db, 'folders', 'user_id', userId);
-  run(db, 'INSERT INTO folders (id, user_id, title, position, created_at) VALUES (?, ?, ?, ?, ?)', [id, userId, title, pos, nowIso()]);
+  const pos = nextPosition(db, 'workspaces', 'user_id', userId);
+  run(db, 'INSERT INTO workspaces (id, user_id, title, position, created_at) VALUES (?, ?, ?, ?, ?)', [id, userId, title, pos, nowIso()]);
   return { id, userId, title, position: pos };
+}
+
+export function updateWorkspace(db: Database, userId: string, workspaceId: string, title: string): Workspace {
+  mustOwn(db, 'workspaces', workspaceId, userId);
+  run(db, 'UPDATE workspaces SET title = ? WHERE id = ?', [title, workspaceId]);
+  const w = one(all<any>(db, 'SELECT id, user_id, title, position FROM workspaces WHERE id = ?', [workspaceId]));
+  return toWorkspace(w);
+}
+
+export function deleteWorkspace(db: Database, userId: string, workspaceId: string): void {
+  mustOwn(db, 'workspaces', workspaceId, userId);
+  run(db, 'DELETE FROM workspaces WHERE id = ?', [workspaceId]);
+}
+
+export function reorderWorkspaces(db: Database, userId: string, orderedIds: string[]): void {
+  const owned = new Set(all<any>(db, 'SELECT id FROM workspaces WHERE user_id = ?', [userId]).map((r: any) => r.id));
+  if (orderedIds.length !== owned.size) throw new Error('orderedIds must include all workspaces');
+  orderedIds.forEach((id) => {
+    if (!owned.has(id)) throw new Error('Invalid workspace id');
+  });
+  orderedIds.forEach((id, idx) => run(db, 'UPDATE workspaces SET position = ? WHERE id = ?', [idx, id]));
+}
+
+// Folders
+export function createFolder(db: Database, userId: string, workspaceId: string, title: string): Folder {
+  mustOwn(db, 'workspaces', workspaceId, userId);
+  const id = randomUUID();
+  const pos = nextPosition(db, 'folders', 'workspace_id', workspaceId);
+  run(db, 'INSERT INTO folders (id, user_id, workspace_id, title, position, created_at) VALUES (?, ?, ?, ?, ?, ?)', [id, userId, workspaceId, title, pos, nowIso()]);
+  return { id, userId, workspaceId, title, position: pos };
 }
 
 export function updateFolder(db: Database, userId: string, folderId: string, title: string): Folder {
   mustOwn(db, 'folders', folderId, userId);
   run(db, 'UPDATE folders SET title = ? WHERE id = ?', [title, folderId]);
-  const f = one(all<any>(db, 'SELECT id, user_id, title, position FROM folders WHERE id = ?', [folderId]));
+  const f = one(all<any>(db, 'SELECT id, user_id, workspace_id, title, position FROM folders WHERE id = ?', [folderId]));
   return toFolder(f);
 }
 
@@ -116,13 +149,23 @@ export function deleteFolder(db: Database, userId: string, folderId: string): vo
   run(db, 'DELETE FROM folders WHERE id = ?', [folderId]);
 }
 
-export function reorderFolders(db: Database, userId: string, orderedIds: string[]): void {
-  const owned = new Set(all<any>(db, 'SELECT id FROM folders WHERE user_id = ?', [userId]).map((r: any) => r.id));
-  if (orderedIds.length !== owned.size) throw new Error('orderedIds must include all folders');
+export function reorderFolders(db: Database, userId: string, workspaceId: string, orderedIds: string[]): void {
+  mustOwn(db, 'workspaces', workspaceId, userId);
+  const owned = new Set(all<any>(db, 'SELECT id FROM folders WHERE user_id = ? AND workspace_id = ?', [userId, workspaceId]).map((r: any) => r.id));
+  if (orderedIds.length !== owned.size) throw new Error('orderedIds must include all folders in workspace');
   orderedIds.forEach((id) => {
     if (!owned.has(id)) throw new Error('Invalid folder id');
   });
   orderedIds.forEach((id, idx) => run(db, 'UPDATE folders SET position = ? WHERE id = ?', [idx, id]));
+}
+
+export function moveFolderToWorkspace(db: Database, userId: string, folderId: string, workspaceId: string, orderedIds: string[]): void {
+  mustOwn(db, 'folders', folderId, userId);
+  mustOwn(db, 'workspaces', workspaceId, userId);
+
+  run(db, 'UPDATE folders SET workspace_id = ? WHERE id = ?', [workspaceId, folderId]);
+  // normalize ordering for target workspace
+  reorderFolders(db, userId, workspaceId, orderedIds);
 }
 
 export function createGroup(db: Database, userId: string, folderId: string, title: string): Group {
@@ -244,8 +287,12 @@ function mustOwn(db: Database, table: string, id: string, userId: string): void 
   if (rows.length === 0) throw new Error('Not found');
 }
 
-function toFolder(r: any): Folder {
+function toWorkspace(r: any): Workspace {
   return { id: r.id, userId: r.user_id, title: r.title, position: Number(r.position) };
+}
+
+function toFolder(r: any): Folder {
+  return { id: r.id, userId: r.user_id, workspaceId: r.workspace_id, title: r.title, position: Number(r.position) };
 }
 
 function toGroup(r: any): Group {

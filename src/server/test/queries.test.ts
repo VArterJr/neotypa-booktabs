@@ -36,11 +36,13 @@ describe('db/queries', () => {
   it('reorders folders and groups', async () => {
     const db = await makeDb();
     const user = createUser(db, 'bob', 'pw');
+    const state = getState(db, user.id);
+    const workspaceId = state.workspaces[0]!.id;
 
-    const f1 = createFolder(db, user.id, 'A');
-    const f2 = createFolder(db, user.id, 'B');
+    const f1 = createFolder(db, user.id, workspaceId, 'A');
+    const f2 = createFolder(db, user.id, workspaceId, 'B');
 
-    reorderFolders(db, user.id, [f2.id, f1.id, ...getState(db, user.id).folders.filter(f => f.id !== f1.id && f.id !== f2.id).map(f => f.id)]);
+    reorderFolders(db, user.id, workspaceId, [f2.id, f1.id, ...getState(db, user.id).folders.filter(f => f.id !== f1.id && f.id !== f2.id).map(f => f.id)]);
 
     const state1 = getState(db, user.id);
     expect(state1.folders[0]!.id).toBe(f2.id);
@@ -57,8 +59,10 @@ describe('db/queries', () => {
   it('moves and reorders bookmarks with tags', async () => {
     const db = await makeDb();
     const user = createUser(db, 'cara', 'pw');
+    const initialState = getState(db, user.id);
+    const workspaceId = initialState.workspaces[0]!.id;
 
-    const folder = createFolder(db, user.id, 'F');
+    const folder = createFolder(db, user.id, workspaceId, 'F');
     const g1 = createGroup(db, user.id, folder.id, 'G1');
     const g2 = createGroup(db, user.id, folder.id, 'G2');
 

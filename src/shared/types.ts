@@ -13,9 +13,17 @@ export interface User {
   preferences: UserPreferences;
 }
 
+export interface Workspace {
+  id: Id;
+  userId: Id;
+  title: string;
+  position: number;
+}
+
 export interface Folder {
   id: Id;
   userId: Id;
+  workspaceId: Id;
   title: string;
   position: number;
 }
@@ -40,6 +48,7 @@ export interface Bookmark {
 }
 
 export interface AppState {
+  workspaces: Workspace[];
   folders: Folder[];
   groups: Group[];
   bookmarks: Bookmark[];
@@ -47,4 +56,14 @@ export interface AppState {
 
 export interface ApiErrorResponse {
   error: string;
+}
+
+export type ImportStrategy = 'flatten' | 'skip' | 'root';
+
+export interface ImportResult {
+  foldersCreated: number;
+  groupsCreated: number;
+  bookmarksCreated: number;
+  bookmarksSkipped: number;
+  warnings: string[];
 }

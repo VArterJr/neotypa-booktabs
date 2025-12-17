@@ -5,6 +5,7 @@ A self-hosted bookmark manager with tabbed and hierarchical views.
 **Features:**
 - Tabbed + grouped view for organizing bookmarks in folders with grouped cards
 - Hierarchical view for navigating nested folder structures
+- Import/Export bookmarks in Netscape format (compatible with all browsers)
 - Multi-user support with secure authentication
 - SQLite file storage (no database service required)
 - Simple deployment (Node.js only)
@@ -67,6 +68,7 @@ Environment variables (create a `.env` file from `.env.example`):
 - **Tags**: Multiple tags per bookmark
 - **Fields**: URL, title, description, tags
 - **Organization**: Folders → Groups → Bookmarks
+- **Import/Export**: Netscape format support for migrating from browsers
 
 ### Themes
 - All daisyUI themes included

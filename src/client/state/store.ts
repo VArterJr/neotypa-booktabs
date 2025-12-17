@@ -1,9 +1,10 @@
-import type { AppState, Bookmark, Folder, Group, User, UserPreferences, ViewMode } from '@app/shared';
+import type { AppState, Bookmark, Folder, Group, User, UserPreferences, ViewMode, Workspace } from '@app/shared';
 import { apiFetch } from '../api/http';
 
 export interface StoreState {
   user: User | null;
   app: AppState;
+  selectedWorkspaceId: string | null;
   selectedFolderId: string | null;
   selectedGroupId: string | null;
   loading: boolean;
@@ -19,7 +20,8 @@ export class AppStore {
   constructor() {
     this.state = {
       user: null,
-      app: { folders: [], groups: [], bookmarks: [] },
+      app: { workspaces: [], folders: [], groups: [], bookmarks: [] },
+      selectedWorkspaceId: null,
       selectedFolderId: null,
       selectedGroupId: null,
       loading: false,
@@ -57,33 +59,54 @@ export class AppStore {
 
   async refreshState(): Promise<void> {
     const app = await apiFetch<AppState>('/api/state', { method: 'GET' });
+    let selectedWorkspaceId = this.state.selectedWorkspaceId;
     let selectedFolderId = this.state.selectedFolderId;
     let selectedGroupId = this.state.selectedGroupId;
 
-    if (!selectedFolderId || !app.folders.some(f => f.id === selectedFolderId)) {
-      selectedFolderId = app.folders[0]?.id ?? null;
+    // Select first workspace if current not found
+    if (!selectedWorkspaceId || !app.workspaces.some(w => w.id === selectedWorkspaceId)) {
+      selectedWorkspaceId = app.workspaces[0]?.id ?? null;
     }
 
+    // Select first folder in workspace if current not found
+    const foldersInWorkspace = selectedWorkspaceId ? app.folders.filter(f => f.workspaceId === selectedWorkspaceId) : [];
+    if (!selectedFolderId || !foldersInWorkspace.some(f => f.id === selectedFolderId)) {
+      selectedFolderId = foldersInWorkspace[0]?.id ?? null;
+    }
+
+    // Select first group in folder if current not found
     const groupsForFolder = selectedFolderId ? app.groups.filter(g => g.folderId === selectedFolderId) : [];
     if (!selectedGroupId || !groupsForFolder.some(g => g.id === selectedGroupId)) {
       selectedGroupId = groupsForFolder[0]?.id ?? null;
     }
 
-    this.set({ app, selectedFolderId, selectedGroupId });
+    this.set({ app, selectedWorkspaceId, selectedFolderId, selectedGroupId });
   }
 
   selectFolder(folderId: string): void {
-    const folderExists = this.state.app.folders.some((f) => f.id === folderId);
-    if (!folderExists) return;
+    const folder = this.state.app.folders.find((f) => f.id === folderId);
+    if (!folder) return;
     const groupsForFolder = this.state.app.groups.filter((g) => g.folderId === folderId);
     const selectedGroupId = groupsForFolder[0]?.id ?? null;
-    this.set({ selectedFolderId: folderId, selectedGroupId });
+    this.set({ selectedWorkspaceId: folder.workspaceId, selectedFolderId: folderId, selectedGroupId });
   }
 
   selectGroup(groupId: string): void {
     const group = this.state.app.groups.find((g) => g.id === groupId);
     if (!group) return;
-    this.set({ selectedFolderId: group.folderId, selectedGroupId: groupId });
+    const folder = this.state.app.folders.find((f) => f.id === group.folderId);
+    if (!folder) return;
+    this.set({ selectedWorkspaceId: folder.workspaceId, selectedFolderId: group.folderId, selectedGroupId: groupId });
+  }
+
+  selectWorkspace(workspaceId: string): void {
+    const workspaceExists = this.state.app.workspaces.some((w) => w.id === workspaceId);
+    if (!workspaceExists) return;
+    const foldersInWorkspace = this.state.app.folders.filter((f) => f.workspaceId === workspaceId);
+    const selectedFolderId = foldersInWorkspace[0]?.id ?? null;
+    const groupsForFolder = selectedFolderId ? this.state.app.groups.filter((g) => g.folderId === selectedFolderId) : [];
+    const selectedGroupId = groupsForFolder[0]?.id ?? null;
+    this.set({ selectedWorkspaceId: workspaceId, selectedFolderId, selectedGroupId });
   }
 
   // Auth
@@ -100,7 +123,13 @@ export class AppStore {
 
   async logout(): Promise<void> {
     await apiFetch('/api/auth/logout', { method: 'POST' });
-    this.set({ user: null, app: { folders: [], groups: [], bookmarks: [] }, selectedFolderId: null, selectedGroupId: null });
+    this.set({ 
+      user: null, 
+      app: { workspaces: [], folders: [], groups: [], bookmarks: [] }, 
+      selectedWorkspaceId: null, 
+      selectedFolderId: null, 
+      selectedGroupId: null 
+    });
   }
 
   // Preferences
@@ -114,9 +143,33 @@ export class AppStore {
     if (this.state.user) this.set({ user: { ...this.state.user, preferences: prefs } });
   }
 
+  // Workspaces
+  async createWorkspace(title: string): Promise<void> {
+    const workspace = await apiFetch<Workspace>('/api/workspaces', { method: 'POST', body: JSON.stringify({ title }) });
+    this.set({ app: { ...this.state.app, workspaces: [...this.state.app.workspaces, workspace].sort(byPosition) } });
+    this.set({ selectedWorkspaceId: workspace.id });
+  }
+
+  async updateWorkspace(id: string, title: string): Promise<void> {
+    const workspace = await apiFetch<Workspace>(`/api/workspaces/${id}`, { method: 'PUT', body: JSON.stringify({ title }) });
+    this.set({ app: { ...this.state.app, workspaces: this.state.app.workspaces.map(w => (w.id === id ? workspace : w)) } });
+  }
+
+  async deleteWorkspace(id: string): Promise<void> {
+    await apiFetch(`/api/workspaces/${id}`, { method: 'DELETE' });
+    await this.refreshState();
+  }
+
+  async reorderWorkspaces(orderedIds: string[]): Promise<void> {
+    await apiFetch('/api/workspaces/reorder', { method: 'PUT', body: JSON.stringify({ orderedIds }) });
+    await this.refreshState();
+  }
+
   // Folders
   async createFolder(title: string): Promise<void> {
-    const folder = await apiFetch<Folder>('/api/folders', { method: 'POST', body: JSON.stringify({ title }) });
+    const workspaceId = this.state.selectedWorkspaceId;
+    if (!workspaceId) throw new Error('No workspace selected');
+    const folder = await apiFetch<Folder>('/api/folders', { method: 'POST', body: JSON.stringify({ workspaceId, title }) });
     this.set({ app: { ...this.state.app, folders: [...this.state.app.folders, folder].sort(byPosition) } });
     this.set({ selectedFolderId: folder.id });
   }
@@ -132,7 +185,14 @@ export class AppStore {
   }
 
   async reorderFolders(orderedIds: string[]): Promise<void> {
-    await apiFetch('/api/folders/reorder', { method: 'PUT', body: JSON.stringify({ orderedIds }) });
+    const workspaceId = this.state.selectedWorkspaceId;
+    if (!workspaceId) throw new Error('No workspace selected');
+    await apiFetch('/api/folders/reorder', { method: 'PUT', body: JSON.stringify({ workspaceId, orderedIds }) });
+    await this.refreshState();
+  }
+
+  async moveFolder(id: string, workspaceId: string, orderedIds: string[]): Promise<void> {
+    await apiFetch(`/api/folders/${id}/move`, { method: 'PUT', body: JSON.stringify({ workspaceId, orderedIds }) });
     await this.refreshState();
   }
 

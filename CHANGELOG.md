@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+## [0.0.2] - 2025-12-17
+
+### Added
+- **Workspaces**: New top-level organizational layer above folders
+  - Create, edit, delete, and reorder workspaces
+  - Move folders between workspaces via drag-and-drop
+  - Each user starts with a default "Personal" workspace
+  - Tabs for switching between workspaces in both view modes
+- **Import/Export functionality** using Netscape Bookmark Format
+  - Export all bookmarks to HTML file compatible with all major browsers
+  - Import bookmarks from Chrome, Firefox, Edge, Safari, and other browsers
+  - Smart handling of deeply nested folder structures with multiple strategies (flatten, skip)
+  - Detailed import results with statistics and warnings
+  - Sample bookmark file included in documentation
+  - Special handling for Start.me exports
+- Move groups between folders via edit modal
+- Move folders between workspaces via edit modal or drag-and-drop
+
+### Changed
+- Updated data model: Workspace → Folder → Group → Bookmark (was: Folder → Group → Bookmark)
+- Database schema updated with new `workspaces` table and foreign keys
+- All folder operations now scoped to workspace
+- Improved drag-and-drop to support workspace and cross-workspace folder moves
+
+### Documentation
+- New [Import/Export guide](doc/import-export.md) with detailed instructions
+- Sample bookmark HTML file for testing imports
+- Updated architecture documentation to reflect workspace hierarchy
+
 ## [0.0.1] - 2025-12-16
 
 ### Added

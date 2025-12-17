@@ -301,6 +301,9 @@ pm2 logs ntbt --lines 20
 ### Update Checklist
 
 - [ ] Build locally: `npm run build`
+- [ ] **⚠️ IMPORTANT: If deploying to subdirectory, update base-path in `dist/client/index.html`**
+  - Edit line: `<meta name="base-path" content="/apps/ntbt" />`
+  - Use `/` for root deployment, or your subdirectory path
 - [ ] Upload `dist/` folder to server
 - [ ] If package.json changed: `npm install --production` on server
 - [ ] Restart: `pm2 restart ntbt`

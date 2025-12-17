@@ -10,6 +10,9 @@ export const descriptionSchema = z.string().trim().max(4000).default('');
 
 export const tagsSchema = z.array(z.string().trim().min(1).max(64)).max(50).default([]);
 
+export const importStrategySchema = z.enum(['flatten', 'skip', 'root']);
+export const importHtmlSchema = z.string().min(1).max(10_000_000); // Max ~10MB
+
 export function parseOrThrow<T>(schema: z.ZodType<T, any, unknown>, value: unknown): T {
   const r = schema.safeParse(value);
   if (!r.success) throw new Error(r.error.issues[0]?.message ?? 'Invalid input');
