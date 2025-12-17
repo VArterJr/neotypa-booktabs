@@ -87,9 +87,21 @@ See [getting-started.md](doc/getting-started.md) for detailed development enviro
 - Keep functions small and focused
 
 ### Commits
-- Write clear, descriptive commit messages
-- Use present tense ("Add feature" not "Added feature")
-- Reference issues when applicable
+
+Write clear commit messages using conventional commit format:
+
+```
+feat: add new feature
+fix: resolve bug in bookmark import
+docs: update API documentation
+chore: update dependencies
+test: add tests for JSON export
+refactor: simplify folder hierarchy logic
+```
+
+Use present tense and reference issues when applicable. For example: `fix: resolve #123 bookmark deletion issue`
+
+**Do not bump version numbers in regular commits.** Versions are only updated when cutting releases.
 
 ### Testing
 - Add tests for new features
@@ -119,6 +131,42 @@ npm run build
 # Clean build artifacts
 npm run clean
 ```
+
+## Versioning and Releases
+
+We follow semantic versioning but only increment versions when cutting releases, not for individual commits.
+
+### Version Numbers
+
+- **Patch** (0.0.X): Bug fixes, small tweaks, dependency updates
+- **Minor** (0.X.0): New features, API additions, significant enhancements  
+- **Major** (X.0.0): Breaking changes, major rewrites, incompatible API changes
+
+While in 0.x.x, we're still stabilizing the API. Once we reach 1.0.0, breaking changes will require a major version bump.
+
+### Creating a Release
+
+Only project maintainers create releases:
+
+```bash
+# For bug fixes
+npm version patch    # 0.0.2 → 0.0.3
+
+# For new features
+npm version minor    # 0.0.2 → 0.1.0
+
+# For breaking changes
+npm version major    # 0.0.2 → 1.0.0
+
+# Push with tags
+git push --follow-tags
+```
+
+The `npm version` command updates package.json, creates a git tag, and commits the change automatically.
+
+### For Contributors
+
+Just focus on writing good code with clear commit messages. Don't worry about version numbers—the maintainer handles versioning when creating releases.
 
 ## Areas for Contribution
 

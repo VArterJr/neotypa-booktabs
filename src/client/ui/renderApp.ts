@@ -71,18 +71,30 @@ function appHtml(state: StoreState): string {
       </div>
     </div>
     <div class="flex-none gap-2">
-      <button class="btn btn-sm btn-ghost gap-1" data-action="export-bookmarks" title="Export bookmarks">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-        </svg>
-        <span class="hidden sm:inline">Export</span>
-      </button>
-      <button class="btn btn-sm btn-ghost gap-1" data-action="import-bookmarks" title="Import bookmarks">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-        </svg>
-        <span class="hidden sm:inline">Import</span>
-      </button>
+      <div class="dropdown dropdown-end">
+        <button tabindex="0" class="btn btn-sm btn-ghost gap-1" title="Export bookmarks">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          <span class="hidden sm:inline">Export</span>
+        </button>
+        <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box w-52 shadow z-10">
+          <li><a data-action="export-bookmarks-html">HTML (Netscape)</a></li>
+          <li><a data-action="export-bookmarks-json">JSON (Full Backup)</a></li>
+        </ul>
+      </div>
+      <div class="dropdown dropdown-end">
+        <button tabindex="0" class="btn btn-sm btn-ghost gap-1" title="Import bookmarks">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          <span class="hidden sm:inline">Import</span>
+        </button>
+        <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box w-52 shadow z-10">
+          <li><a data-action="import-bookmarks-html">HTML (Netscape)</a></li>
+          <li><a data-action="import-bookmarks-json">JSON (Full Backup)</a></li>
+        </ul>
+      </div>
       <select id="theme-select" class="select select-bordered select-sm w-40">
         ${DAISY_THEMES.map((t) => `<option value="${escapeHtml(t)}" ${t === user.preferences.theme ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('')}
       </select>
@@ -484,6 +496,37 @@ function modalsHtml(): string {
     </div>
   </div>
 </dialog>
+
+<dialog id="modal-import-json" class="modal">
+  <div class="modal-box max-w-2xl">
+    <h3 class="font-bold text-lg">Import JSON Backup</h3>
+    <div class="mt-4 flex flex-col gap-4">
+      <div class="alert alert-info">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <div>
+          <p class="text-sm">Import a full backup in JSON format (exported from Neotypa Booktabs).</p>
+          <p class="text-sm mt-1"><strong>Note:</strong> This will create new workspaces and does not merge with existing data.</p>
+        </div>
+      </div>
+      
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Select JSON backup file</span></div>
+        <input type="file" id="import-json-file-input" accept=".json,application/json" class="file-input file-input-bordered w-full" />
+      </label>
+
+      <div id="import-json-result" class="hidden">
+        <div class="alert" id="import-json-result-alert">
+          <div id="import-json-result-content"></div>
+        </div>
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn" id="import-json-cancel-btn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="import-json-submit-btn">Import</button>
+      </div>
+    </div>
+  </div>
+</dialog>
 `;
 }
 
@@ -519,8 +562,8 @@ function wireHeader(root: HTMLElement, state: StoreState, store: AppStore): void
     });
   });
 
-  // Export bookmarks
-  qsa<HTMLElement>(root, '[data-action="export-bookmarks"]').forEach((btn) => {
+  // Export bookmarks - HTML format
+  qsa<HTMLElement>(root, '[data-action="export-bookmarks-html"]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       try {
         const response = await fetch(`${BASE_PATH}/api/export`, {
@@ -546,10 +589,44 @@ function wireHeader(root: HTMLElement, state: StoreState, store: AppStore): void
     });
   });
 
-  // Import bookmarks
-  qsa<HTMLElement>(root, '[data-action="import-bookmarks"]').forEach((btn) => {
+  // Export bookmarks - JSON format
+  qsa<HTMLElement>(root, '[data-action="export-bookmarks-json"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        const response = await fetch(`${BASE_PATH}/api/export/json`, {
+          credentials: 'same-origin'
+        });
+        
+        if (!response.ok) {
+          throw new Error('Export failed');
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bookmarks-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        alert(`Export failed: ${err}`);
+      }
+    });
+  });
+
+  // Import bookmarks - HTML format
+  qsa<HTMLElement>(root, '[data-action="import-bookmarks-html"]').forEach((btn) => {
     btn.addEventListener('click', () => {
       openImportModal(root, store);
+    });
+  });
+
+  // Import bookmarks - JSON format
+  qsa<HTMLElement>(root, '[data-action="import-bookmarks-json"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      openImportJsonModal(root, store);
     });
   });
 
@@ -1223,6 +1300,102 @@ function openImportModal(root: HTMLElement, store: AppStore): void {
       const result = await apiFetch<ImportResult>('/api/import', {
         method: 'POST',
         body: JSON.stringify({ html, strategy })
+      });
+
+      // Show result
+      resultDiv.classList.remove('hidden');
+      
+      const hasWarnings = result.warnings.length > 0;
+      const hasSkipped = result.bookmarksSkipped > 0;
+      
+      if (hasWarnings || hasSkipped) {
+        resultAlert.className = 'alert alert-warning';
+      } else {
+        resultAlert.className = 'alert alert-success';
+      }
+
+      let summary = `
+        <div class="font-semibold mb-2">Import completed!</div>
+        <ul class="text-sm space-y-1">
+          <li>✓ Created ${result.foldersCreated} folders</li>
+          <li>✓ Created ${result.groupsCreated} groups</li>
+          <li>✓ Imported ${result.bookmarksCreated} bookmarks</li>
+          ${hasSkipped ? `<li>⚠ Skipped ${result.bookmarksSkipped} bookmarks</li>` : ''}
+        </ul>
+      `;
+
+      if (hasWarnings) {
+        summary += `
+          <div class="mt-3">
+            <div class="font-semibold text-sm">Warnings:</div>
+            <ul class="text-xs mt-1 space-y-1 max-h-32 overflow-y-auto">
+              ${result.warnings.map(w => `<li>• ${escapeHtml(w)}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      resultContent.innerHTML = summary;
+
+      // Reload state
+      await store.refreshState();
+
+      // Change buttons
+      submitBtn.classList.add('hidden');
+      cancelBtn.textContent = 'Close';
+    } catch (err) {
+      resultDiv.classList.remove('hidden');
+      resultAlert.className = 'alert alert-error';
+      resultContent.innerHTML = `
+        <div class="font-semibold">Import failed</div>
+        <div class="text-sm mt-1">${escapeHtml(String(err))}</div>
+      `;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Import';
+    }
+  };
+
+  dialog.showModal();
+}
+
+function openImportJsonModal(root: HTMLElement, store: AppStore): void {
+  const dialog = qs<HTMLDialogElement>(root, '#modal-import-json');
+  const fileInput = qs<HTMLInputElement>(root, '#import-json-file-input');
+  const submitBtn = qs<HTMLButtonElement>(root, '#import-json-submit-btn');
+  const cancelBtn = qs<HTMLButtonElement>(root, '#import-json-cancel-btn');
+  const resultDiv = qs<HTMLElement>(root, '#import-json-result');
+  const resultAlert = qs<HTMLElement>(root, '#import-json-result-alert');
+  const resultContent = qs<HTMLElement>(root, '#import-json-result-content');
+
+  // Reset state
+  fileInput.value = '';
+  resultDiv.classList.add('hidden');
+  submitBtn.disabled = false;
+
+  // Cancel button
+  cancelBtn.onclick = () => {
+    dialog.close();
+  };
+
+  // Submit button
+  submitBtn.onclick = async () => {
+    const file = fileInput.files?.[0];
+    if (!file) {
+      alert('Please select a file');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Importing...';
+
+    try {
+      const jsonText = await file.text();
+      const jsonData = JSON.parse(jsonText);
+
+      const result = await apiFetch<ImportResult>('/api/import/json', {
+        method: 'POST',
+        body: JSON.stringify(jsonData)
       });
 
       // Show result

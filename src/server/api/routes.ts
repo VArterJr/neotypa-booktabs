@@ -30,9 +30,9 @@ import {
   updatePreferences,
   updateWorkspace
 } from '../db/queries.js';
-import { descriptionSchema, parseOrThrow, passwordSchema, tagsSchema, titleSchema, urlSchema, usernameSchema, importStrategySchema, importHtmlSchema } from './validation.js';
+import { descriptionSchema, parseOrThrow, passwordSchema, tagsSchema, titleSchema, urlSchema, usernameSchema, importStrategySchema, importHtmlSchema, jsonExportSchema } from './validation.js';
 import type { UserPreferences, ViewMode } from '@app/shared';
-import { exportToNetscape, importFromNetscape, type ImportOptions } from './import-export.js';
+import { exportToNetscape, importFromNetscape, exportToJson, importFromJson, type ImportOptions } from './import-export.js';
 
 export function registerApiRoutes(router: Router, dbFile: SqliteFileDb): void {
   router.on('GET', '/api/me', async (req, res) => {
@@ -314,6 +314,32 @@ export function registerApiRoutes(router: Router, dbFile: SqliteFileDb): void {
 
     const result = await dbFile.withWrite((db) => 
       importFromNetscape(db, userId, html, options)
+    );
+
+    sendJson(res, 200, result);
+  });
+
+  // JSON Export/Import
+  router.on('GET', '/api/export/json', async (req, res) => {
+    const userId = await requireUserId(dbFile, req);
+    const state = await dbFile.withRead((db) => getState(db, userId));
+    
+    const jsonData = exportToJson(state.workspaces, state.folders, state.groups, state.bookmarks);
+    
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="bookmarks-backup.json"');
+    res.writeHead(200);
+    res.end(JSON.stringify(jsonData, null, 2));
+  });
+
+  router.on('POST', '/api/import/json', async (req, res) => {
+    const userId = await requireUserId(dbFile, req);
+    const body = await readJson<any>(req);
+    
+    const jsonData = parseOrThrow(jsonExportSchema, body);
+
+    const result = await dbFile.withWrite((db) => 
+      importFromJson(db, userId, jsonData)
     );
 
     sendJson(res, 200, result);

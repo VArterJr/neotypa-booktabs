@@ -11,6 +11,7 @@
  */
 
 import type { Bookmark, Folder, Group, Workspace } from '@app/shared';
+import type { JsonExportFormat, JsonWorkspace, JsonFolder, JsonGroup, JsonBookmark } from '@app/shared';
 import type { Database } from 'sql.js';
 import { createFolder, createGroup, createBookmark, createWorkspace } from '../db/queries.js';
 import { all } from '../db/util.js';
@@ -532,4 +533,127 @@ function ensureDefaultWorkspace(db: Database, userId: string): Workspace {
   }
   // No workspace exists, create a default one
   return createWorkspace(db, userId, 'Imported');
+}
+
+/**
+ * Export all user data to JSON format with full hierarchy
+ */
+export function exportToJson(
+  workspaces: Workspace[],
+  folders: Folder[],
+  groups: Group[],
+  bookmarks: Bookmark[]
+): JsonExportFormat {
+  // Sort workspaces by position
+  const sortedWorkspaces = [...workspaces].sort((a, b) => a.position - b.position);
+
+  const jsonWorkspaces: JsonWorkspace[] = sortedWorkspaces.map((workspace) => {
+    const workspaceFolders = folders
+      .filter((f) => f.workspaceId === workspace.id)
+      .sort((a, b) => a.position - b.position);
+
+    const jsonFolders: JsonFolder[] = workspaceFolders.map((folder) => {
+      const folderGroups = groups
+        .filter((g) => g.folderId === folder.id)
+        .sort((a, b) => a.position - b.position);
+
+      const jsonGroups: JsonGroup[] = folderGroups.map((group) => {
+        const groupBookmarks = bookmarks
+          .filter((b) => b.groupId === group.id)
+          .sort((a, b) => a.position - b.position);
+
+        const jsonBookmarks: JsonBookmark[] = groupBookmarks.map((bookmark) => ({
+          url: bookmark.url,
+          title: bookmark.title,
+          description: bookmark.description,
+          tags: bookmark.tags,
+          position: bookmark.position,
+        }));
+
+        return {
+          title: group.title,
+          position: group.position,
+          bookmarks: jsonBookmarks,
+        };
+      });
+
+      return {
+        title: folder.title,
+        position: folder.position,
+        groups: jsonGroups,
+      };
+    });
+
+    return {
+      title: workspace.title,
+      position: workspace.position,
+      folders: jsonFolders,
+    };
+  });
+
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    workspaces: jsonWorkspaces,
+  };
+}
+
+/**
+ * Import data from JSON format
+ */
+export async function importFromJson(
+  db: Database,
+  userId: string,
+  data: JsonExportFormat
+): Promise<ImportResult> {
+  const result: ImportResult = {
+    foldersCreated: 0,
+    groupsCreated: 0,
+    bookmarksCreated: 0,
+    bookmarksSkipped: 0,
+    warnings: [],
+  };
+
+  // Validate version
+  if (data.version !== 1) {
+    throw new Error(`Unsupported JSON export version: ${data.version}`);
+  }
+
+  // Import each workspace
+  for (const jsonWorkspace of data.workspaces) {
+    // Create workspace
+    const workspace = createWorkspace(db, userId, jsonWorkspace.title);
+
+    // Import folders
+    for (const jsonFolder of jsonWorkspace.folders) {
+      const folder = createFolder(db, userId, workspace.id, jsonFolder.title);
+      result.foldersCreated++;
+
+      // Import groups
+      for (const jsonGroup of jsonFolder.groups) {
+        const group = createGroup(db, userId, folder.id, jsonGroup.title);
+        result.groupsCreated++;
+
+        // Import bookmarks
+        for (const jsonBookmark of jsonGroup.bookmarks) {
+          try {
+            createBookmark(db, userId, group.id, {
+              url: jsonBookmark.url,
+              title: jsonBookmark.title,
+              description: jsonBookmark.description,
+              tags: jsonBookmark.tags,
+            });
+            result.bookmarksCreated++;
+          } catch (err) {
+            result.warnings.push(
+              `Failed to import bookmark "${jsonBookmark.title}": ${err instanceof Error ? err.message : String(err)}`
+            );
+            result.bookmarksSkipped++;
+          }
+        }
+      }
+    }
+  }
+
+  return result;
 }

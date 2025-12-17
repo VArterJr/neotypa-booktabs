@@ -67,3 +67,38 @@ export interface ImportResult {
   bookmarksSkipped: number;
   warnings: string[];
 }
+
+/**
+ * JSON export format that preserves the full hierarchy and all data
+ */
+export interface JsonExportFormat {
+  version: number;
+  exportedAt: string;
+  workspaces: JsonWorkspace[];
+}
+
+export interface JsonWorkspace {
+  title: string;
+  position: number;
+  folders: JsonFolder[];
+}
+
+export interface JsonFolder {
+  title: string;
+  position: number;
+  groups: JsonGroup[];
+}
+
+export interface JsonGroup {
+  title: string;
+  position: number;
+  bookmarks: JsonBookmark[];
+}
+
+export interface JsonBookmark {
+  url: string;
+  title: string;
+  description: string;
+  tags: string[];
+  position: number;
+}
