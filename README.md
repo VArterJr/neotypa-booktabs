@@ -10,6 +10,9 @@ A self-hosted bookmark manager with tabbed and hierarchical views.
 - SQLite file storage (no database service required)
 - Simple deployment (Node.js only)
 
+**Demo Video:**
+https://github.com/user-attachments/assets/0a212cb8-3fc9-418d-8645-7922b4f44d61
+
 ## Tech Stack
 
 - **Frontend**: TypeScript, Tailwind CSS, daisyUI
